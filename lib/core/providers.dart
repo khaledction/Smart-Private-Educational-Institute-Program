@@ -56,6 +56,40 @@ final registrationsProvider = FutureProvider<List<Registration>>((ref) {
   return ref.watch(repositoryProvider).getRegistrations();
 });
 
+final discountRulesProvider = FutureProvider<List<DiscountRule>>((ref) {
+  ref.watch(dataVersionProvider);
+  return ref.watch(repositoryProvider).getDiscountRules();
+});
+
+// ─── Discount engine ─────────────────────────────────────────────────────────
+
+class AppliedDiscount {
+  final DiscountRule rule;
+  final double amount;
+  const AppliedDiscount(this.rule, this.amount);
+}
+
+/// Finds every active rule matching this registration context and returns
+/// the applied amounts. Total suggested discount = sum of amounts.
+List<AppliedDiscount> applicableDiscounts({
+  required List<DiscountRule> rules,
+  required double price,
+  String? studentId,
+  StudyGroup? group,
+}) {
+  final result = <AppliedDiscount>[];
+  for (final r in rules.where((r) => r.active)) {
+    final matches = switch (r.scope) {
+      DiscountScope.student => studentId != null && r.targetId == studentId,
+      DiscountScope.group => group != null && r.targetId == group.id,
+      DiscountScope.subject => group != null && r.targetId == group.subjectId,
+      DiscountScope.teacher => group != null && r.targetId == group.teacherId,
+    };
+    if (matches) result.add(AppliedDiscount(r, r.amountFor(price)));
+  }
+  return result;
+}
+
 // ─── Domain helpers ──────────────────────────────────────────────────────────
 
 class ConflictInfo {

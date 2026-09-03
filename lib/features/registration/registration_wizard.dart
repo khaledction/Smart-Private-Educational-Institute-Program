@@ -520,6 +520,7 @@ class _PaymentStepState extends ConsumerState<_PaymentStep> {
   final _discountCtrl = TextEditingController(text: '0');
   final _paidCtrl = TextEditingController();
   bool _busy = false;
+  String? _autoAppliedForGroup; // avoid re-applying on every rebuild
 
   @override
   void dispose() {
@@ -544,6 +545,23 @@ class _PaymentStepState extends ConsumerState<_PaymentStep> {
     final teacher = teachers.firstWhere((t) => t.id == group.teacherId,
         orElse: () => const Teacher(id: '?', name: '?', specialization: ''));
     final price = group.effectivePrice(subject);
+
+    // ── Automatic discounts from administration rules ──
+    final rules = ref.watch(discountRulesProvider).value ?? [];
+    final applied = applicableDiscounts(
+      rules: rules,
+      price: price,
+      studentId: wizard.student!.id,
+      group: group,
+    );
+    final autoDiscount =
+        applied.fold<double>(0, (sum, a) => sum + a.amount);
+    if (_autoAppliedForGroup != group.id) {
+      _autoAppliedForGroup = group.id;
+      _discountCtrl.text = autoDiscount.toStringAsFixed(0);
+      _paidCtrl.clear();
+    }
+
     final discount = double.tryParse(_discountCtrl.text) ?? 0;
     final net = (price - discount).clamp(0, double.infinity).toDouble();
     if (_paidCtrl.text.isEmpty) _paidCtrl.text = net.toStringAsFixed(0);
@@ -565,6 +583,24 @@ class _PaymentStepState extends ConsumerState<_PaymentStep> {
             _row(s.price, money(price, currency)),
             _row(s.discount, '- ${money(discount, currency)}'),
             _row(s.netTotal, money(net, currency), bold: true),
+            if (applied.isNotEmpty) ...[
+              const SizedBox(height: 6),
+              for (final a in applied)
+                Row(children: [
+                  const Icon(Icons.auto_awesome,
+                      size: 16, color: Colors.green),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      '${s.autoDiscountApplied}'
+                      '${a.rule.note.isNotEmpty ? ' — ${a.rule.note}' : ''}'
+                      ' (- ${money(a.amount, currency)})',
+                      style: const TextStyle(
+                          color: Colors.green, fontSize: 13),
+                    ),
+                  ),
+                ]),
+            ],
           ]),
         ),
       ),

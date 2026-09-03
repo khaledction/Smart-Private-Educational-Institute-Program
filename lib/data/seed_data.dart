@@ -4,23 +4,23 @@ import 'models/models.dart';
 /// fully usable before connecting Supabase.
 class SeedData {
   static final subjects = <Subject>[
-    const Subject(id: 'sub-phy', nameAr: 'فيزياء', nameEn: 'Physics', basePrice: 200000, durationMonths: 3),
-    const Subject(id: 'sub-math', nameAr: 'رياضيات', nameEn: 'Mathematics', basePrice: 220000, durationMonths: 3),
-    const Subject(id: 'sub-chem', nameAr: 'كيمياء', nameEn: 'Chemistry', basePrice: 180000, durationMonths: 3),
-    const Subject(id: 'sub-en', nameAr: 'لغة إنجليزية', nameEn: 'English', basePrice: 150000, durationMonths: 4),
-    const Subject(id: 'sub-ar', nameAr: 'لغة عربية', nameEn: 'Arabic', basePrice: 140000, durationMonths: 4),
-    const Subject(id: 'sub-bio', nameAr: 'علوم / أحياء', nameEn: 'Biology', basePrice: 190000, durationMonths: 3),
+    const Subject(id: 'sub-phy', nameAr: 'فيزياء', nameEn: 'Physics', basePrice: 200000, durationMonths: 3, totalHours: 36),
+    const Subject(id: 'sub-math', nameAr: 'رياضيات', nameEn: 'Mathematics', basePrice: 220000, durationMonths: 3, totalHours: 40),
+    const Subject(id: 'sub-chem', nameAr: 'كيمياء', nameEn: 'Chemistry', basePrice: 180000, durationMonths: 3, totalHours: 32),
+    const Subject(id: 'sub-en', nameAr: 'لغة إنجليزية', nameEn: 'English', basePrice: 150000, durationMonths: 4, totalHours: 48),
+    const Subject(id: 'sub-ar', nameAr: 'لغة عربية', nameEn: 'Arabic', basePrice: 140000, durationMonths: 4, totalHours: 44),
+    const Subject(id: 'sub-bio', nameAr: 'علوم / أحياء', nameEn: 'Biology', basePrice: 190000, durationMonths: 3, totalHours: 34),
   ];
 
   static final teachers = <Teacher>[
-    const Teacher(id: 't-ahmad', name: 'أ. أحمد الحسن', specialization: 'Physics'),
-    const Teacher(id: 't-khaled', name: 'أ. خالد يوسف', specialization: 'Physics'),
-    const Teacher(id: 't-samer', name: 'أ. سامر ديب', specialization: 'Mathematics'),
-    const Teacher(id: 't-rana', name: 'أ. رنا عبود', specialization: 'Mathematics'),
-    const Teacher(id: 't-lina', name: 'أ. لينا قصار', specialization: 'Chemistry'),
-    const Teacher(id: 't-maya', name: 'أ. مايا نصر', specialization: 'English'),
-    const Teacher(id: 't-omar', name: 'أ. عمر شهاب', specialization: 'Arabic'),
-    const Teacher(id: 't-hiba', name: 'أ. هبة زين', specialization: 'Biology'),
+    const Teacher(id: 't-ahmad', name: 'أ. أحمد الحسن', specialization: 'Physics', sessionPrice: 18000),
+    const Teacher(id: 't-khaled', name: 'أ. خالد يوسف', specialization: 'Physics', sessionPrice: 25000),
+    const Teacher(id: 't-samer', name: 'أ. سامر ديب', specialization: 'Mathematics', sessionPrice: 20000),
+    const Teacher(id: 't-rana', name: 'أ. رنا عبود', specialization: 'Mathematics', sessionPrice: 18000),
+    const Teacher(id: 't-lina', name: 'أ. لينا قصار', specialization: 'Chemistry', sessionPrice: 16000),
+    const Teacher(id: 't-maya', name: 'أ. مايا نصر', specialization: 'English', sessionPrice: 14000),
+    const Teacher(id: 't-omar', name: 'أ. عمر شهاب', specialization: 'Arabic', sessionPrice: 13000),
+    const Teacher(id: 't-hiba', name: 'أ. هبة زين', specialization: 'Biology', sessionPrice: 17000),
   ];
 
   // ISO days: 1=Mon 2=Tue 3=Wed 4=Thu 5=Fri 6=Sat 7=Sun
@@ -85,6 +85,19 @@ class SeedData {
     Student(id: 's-1004', name: 'ليان مراد', barcode: 'ST-1004', phone: '0934444444',
         guardianName: 'مراد مراد', guardianPhone: '0944444444',
         createdAt: DateTime(2026, 8, 25)),
+  ];
+
+  static final discountRules = <DiscountRule>[
+    DiscountRule(
+      id: 'd-1', scope: DiscountScope.student, targetId: 's-1002',
+      type: DiscountType.percent, value: 10,
+      note: 'منحة تفوق', createdAt: DateTime(2026, 8, 15),
+    ),
+    DiscountRule(
+      id: 'd-2', scope: DiscountScope.subject, targetId: 'sub-en',
+      type: DiscountType.fixed, value: 15000,
+      note: 'عرض بداية الفصل', createdAt: DateTime(2026, 8, 20),
+    ),
   ];
 
   static final registrations = <Registration>[

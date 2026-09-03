@@ -91,6 +91,46 @@ class S {
   String get recentActivity => t('Recent registrations', 'آخر التسجيلات');
   String get occupancy => t('Occupancy', 'الإشغال');
 
+  // Administration / pricing
+  String get administration => t('Administration', 'الإدارة');
+  String get pricing => t('Pricing', 'الأسعار');
+  String get subjectsPricing => t('Course prices', 'أسعار الكورسات');
+  String get teachersPricing => t('Teacher session prices', 'أسعار جلسات المدرسين');
+  String get groupsPricing => t('Group price overrides', 'أسعار خاصة للمجموعات');
+  String get sessionPrice => t('Session price', 'سعر الجلسة');
+  String get coursePrice => t('Full course price', 'سعر الكورس الكامل');
+  String get totalHours => t('Total hours', 'عدد الساعات');
+  String get hours => t('hours', 'ساعة');
+  String get durationMonthsLabel => t('Duration (months)', 'المدة (أشهر)');
+  String get priceOverrideLabel =>
+      t('Special price (empty = subject price)', 'سعر خاص (فارغ = سعر المادة)');
+  String get edit => t('Edit', 'تعديل');
+  String get updated => t('Updated successfully', 'تم التحديث بنجاح');
+  String get useSubjectPrice => t('Uses subject price', 'يعتمد سعر المادة');
+
+  // Discounts
+  String get discounts => t('Discounts', 'الخصومات');
+  String get addDiscount => t('Add discount', 'إضافة خصم');
+  String get discountScope => t('Applies to', 'يُطبق على');
+  String get scopeStudent => t('Student', 'طالب');
+  String get scopeGroup => t('Group', 'مجموعة');
+  String get scopeSubject => t('Subject', 'مادة');
+  String get scopeTeacher => t('Teacher', 'مدرس');
+  String get discountTypeLabel => t('Type', 'النوع');
+  String get percent => t('Percent %', 'نسبة %');
+  String get fixedAmount => t('Fixed amount', 'مبلغ ثابت');
+  String get valueLabel => t('Value', 'القيمة');
+  String get noteLabel => t('Note', 'ملاحظة');
+  String get target => t('Target', 'الهدف');
+  String get activeLabel => t('Active', 'مفعّل');
+  String get inactiveLabel => t('Inactive', 'موقوف');
+  String get delete => t('Delete', 'حذف');
+  String get noDiscounts => t('No discount rules yet', 'لا توجد قواعد خصم بعد');
+  String get autoDiscountApplied =>
+      t('Automatic discount applied', 'تم تطبيق خصم تلقائي');
+  String get confirmDelete =>
+      t('Delete this discount rule?', 'هل تريد حذف قاعدة الخصم؟');
+
   // Days (ISO: 1 = Monday)
   List<String> get days => ar
       ? const ['الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت', 'الأحد']

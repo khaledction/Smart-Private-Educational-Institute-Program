@@ -45,6 +45,82 @@ class SupabaseInstituteRepository implements InstituteRepository {
   }
 
   @override
+  Future<List<DiscountRule>> getDiscountRules() async {
+    final rows =
+        await _db.from('discount_rules').select().order('created_at');
+    return rows.map((r) => DiscountRule.fromMap(r)).toList();
+  }
+
+  @override
+  Future<void> updateSubjectPricing({
+    required String subjectId,
+    required double basePrice,
+    required int totalHours,
+    required int durationMonths,
+  }) async {
+    await _db.from('subjects').update({
+      'base_price': basePrice,
+      'total_hours': totalHours,
+      'duration_months': durationMonths,
+    }).eq('id', subjectId);
+  }
+
+  @override
+  Future<void> updateTeacherSessionPrice({
+    required String teacherId,
+    required double sessionPrice,
+  }) async {
+    await _db
+        .from('teachers')
+        .update({'session_price': sessionPrice}).eq('id', teacherId);
+  }
+
+  @override
+  Future<void> updateGroupPriceOverride({
+    required String groupId,
+    double? priceOverride,
+  }) async {
+    await _db
+        .from('groups')
+        .update({'price_override': priceOverride}).eq('id', groupId);
+  }
+
+  @override
+  Future<DiscountRule> addDiscountRule({
+    required DiscountScope scope,
+    required String targetId,
+    required DiscountType type,
+    required double value,
+    String note = '',
+  }) async {
+    final row = await _db
+        .from('discount_rules')
+        .insert({
+          'scope': scope.name,
+          'target_id': targetId,
+          'type': type.name,
+          'value': value,
+          'note': note,
+          'active': true,
+        })
+        .select()
+        .single();
+    return DiscountRule.fromMap(row);
+  }
+
+  @override
+  Future<void> setDiscountRuleActive(String ruleId, bool active) async {
+    await _db
+        .from('discount_rules')
+        .update({'active': active}).eq('id', ruleId);
+  }
+
+  @override
+  Future<void> deleteDiscountRule(String ruleId) async {
+    await _db.from('discount_rules').delete().eq('id', ruleId);
+  }
+
+  @override
   Future<Student> addStudent({
     required String name,
     required String phone,

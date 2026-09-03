@@ -57,8 +57,9 @@ class Subject {
   final String id;
   final String nameAr;
   final String nameEn;
-  final double basePrice;
+  final double basePrice; // full-course price
   final int durationMonths;
+  final int totalHours; // full-course hours
 
   const Subject({
     required this.id,
@@ -66,9 +67,20 @@ class Subject {
     required this.nameEn,
     required this.basePrice,
     required this.durationMonths,
+    this.totalHours = 0,
   });
 
   String name(bool arabic) => arabic ? nameAr : nameEn;
+
+  Subject copyWith({double? basePrice, int? totalHours, int? durationMonths}) =>
+      Subject(
+        id: id,
+        nameAr: nameAr,
+        nameEn: nameEn,
+        basePrice: basePrice ?? this.basePrice,
+        durationMonths: durationMonths ?? this.durationMonths,
+        totalHours: totalHours ?? this.totalHours,
+      );
 
   factory Subject.fromMap(Map<String, dynamic> m) => Subject(
         id: m['id'] as String,
@@ -76,6 +88,7 @@ class Subject {
         nameEn: m['name_en'] as String,
         basePrice: (m['base_price'] as num).toDouble(),
         durationMonths: (m['duration_months'] as num).toInt(),
+        totalHours: (m['total_hours'] as num?)?.toInt() ?? 0,
       );
 
   Map<String, dynamic> toMap() => {
@@ -84,6 +97,7 @@ class Subject {
         'name_en': nameEn,
         'base_price': basePrice,
         'duration_months': durationMonths,
+        'total_hours': totalHours,
       };
 }
 
@@ -92,16 +106,36 @@ class Teacher {
   final String name;
   final String specialization;
 
-  const Teacher({required this.id, required this.name, required this.specialization});
+  /// Price per single session for this teacher — set by administration.
+  final double sessionPrice;
+
+  const Teacher({
+    required this.id,
+    required this.name,
+    required this.specialization,
+    this.sessionPrice = 0,
+  });
+
+  Teacher copyWith({double? sessionPrice}) => Teacher(
+        id: id,
+        name: name,
+        specialization: specialization,
+        sessionPrice: sessionPrice ?? this.sessionPrice,
+      );
 
   factory Teacher.fromMap(Map<String, dynamic> m) => Teacher(
         id: m['id'] as String,
         name: m['name'] as String,
         specialization: (m['specialization'] ?? '') as String,
+        sessionPrice: (m['session_price'] as num?)?.toDouble() ?? 0,
       );
 
-  Map<String, dynamic> toMap() =>
-      {'id': id, 'name': name, 'specialization': specialization};
+  Map<String, dynamic> toMap() => {
+        'id': id,
+        'name': name,
+        'specialization': specialization,
+        'session_price': sessionPrice,
+      };
 }
 
 /// A weekly time slot: dayOfWeek (1 = Monday .. 7 = Sunday, ISO) + start hour/minute.
@@ -202,6 +236,78 @@ class StudyGroup {
         'enrolled_count': enrolledCount,
         'price_override': priceOverride,
         'label': label,
+      };
+}
+
+/// What a discount rule applies to.
+enum DiscountScope { student, group, subject, teacher }
+
+/// How the discount value is interpreted.
+enum DiscountType { percent, fixed }
+
+/// A discount rule defined by administration.
+/// Scope + targetId identify WHO/WHAT gets the discount:
+///   - student  → a specific student gets it on every registration
+///   - group    → anyone registering in that group
+///   - subject  → anyone registering in any group of that subject
+///   - teacher  → anyone registering with that teacher
+class DiscountRule {
+  final String id;
+  final DiscountScope scope;
+  final String targetId;
+  final DiscountType type;
+  final double value; // percent (0-100) or fixed amount
+  final String note;
+  final bool active;
+  final DateTime createdAt;
+
+  const DiscountRule({
+    required this.id,
+    required this.scope,
+    required this.targetId,
+    required this.type,
+    required this.value,
+    this.note = '',
+    this.active = true,
+    required this.createdAt,
+  });
+
+  DiscountRule copyWith({bool? active, double? value, String? note}) =>
+      DiscountRule(
+        id: id,
+        scope: scope,
+        targetId: targetId,
+        type: type,
+        value: value ?? this.value,
+        note: note ?? this.note,
+        active: active ?? this.active,
+        createdAt: createdAt,
+      );
+
+  /// Discount amount in currency for a given base price.
+  double amountFor(double price) =>
+      type == DiscountType.percent ? price * value / 100.0 : value;
+
+  factory DiscountRule.fromMap(Map<String, dynamic> m) => DiscountRule(
+        id: m['id'] as String,
+        scope: DiscountScope.values.byName(m['scope'] as String),
+        targetId: m['target_id'] as String,
+        type: DiscountType.values.byName(m['type'] as String),
+        value: (m['value'] as num).toDouble(),
+        note: (m['note'] ?? '') as String,
+        active: (m['active'] ?? true) as bool,
+        createdAt: DateTime.parse(m['created_at'] as String),
+      );
+
+  Map<String, dynamic> toMap() => {
+        'id': id,
+        'scope': scope.name,
+        'target_id': targetId,
+        'type': type.name,
+        'value': value,
+        'note': note,
+        'active': active,
+        'created_at': createdAt.toIso8601String(),
       };
 }
 

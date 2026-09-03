@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/providers.dart';
+import '../admin/admin_screen.dart';
 import '../dashboard/dashboard_screen.dart';
 import '../groups/groups_screen.dart';
 import '../receipts/receipts_screen.dart';
@@ -30,15 +31,24 @@ class _HomeShellState extends ConsumerState<HomeShell> {
       StudentsScreen(),
       GroupsScreen(),
       ReceiptsScreen(),
+      AdminScreen(),
     ];
 
-    final titles = [s.dashboard, s.newRegistration, s.students, s.groups, s.receipts];
+    final titles = [
+      s.dashboard,
+      s.newRegistration,
+      s.students,
+      s.groups,
+      s.receipts,
+      s.administration,
+    ];
     final icons = const [
       Icons.dashboard_outlined,
       Icons.point_of_sale,
       Icons.people_outline,
       Icons.calendar_month_outlined,
       Icons.receipt_long_outlined,
+      Icons.admin_panel_settings_outlined,
     ];
 
     return Scaffold(

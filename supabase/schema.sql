@@ -25,15 +25,33 @@ create table if not exists subjects (
   name_ar         text not null,
   name_en         text not null,
   base_price      numeric(12,2) not null check (base_price >= 0),
-  duration_months int not null default 3 check (duration_months > 0)
+  duration_months int not null default 3 check (duration_months > 0),
+  total_hours     int not null default 0 check (total_hours >= 0)
 );
 
 -- ── Teachers ─────────────────────────────────────────────────
 create table if not exists teachers (
   id             uuid primary key default gen_random_uuid(),
   name           text not null,
-  specialization text not null default ''
+  specialization text not null default '',
+  session_price  numeric(12,2) not null default 0 check (session_price >= 0)
 );
+
+-- ── Discount rules (set by administration) ───────────────────
+-- scope: student | group | subject | teacher
+-- type:  percent | fixed
+create table if not exists discount_rules (
+  id         uuid primary key default gen_random_uuid(),
+  scope      text not null check (scope in ('student','group','subject','teacher')),
+  target_id  uuid not null,
+  type       text not null check (type in ('percent','fixed')),
+  value      numeric(12,2) not null check (value >= 0),
+  note       text not null default '',
+  active     boolean not null default true,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists idx_discount_rules_target on discount_rules (scope, target_id);
 
 -- ── Groups (subject × teacher × schedule × price) ────────────
 create table if not exists groups (

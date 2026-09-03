@@ -24,6 +24,38 @@ abstract class InstituteRepository {
   Future<List<Teacher>> getTeachers();
   Future<List<StudyGroup>> getGroups();
   Future<List<Registration>> getRegistrations();
+  Future<List<DiscountRule>> getDiscountRules();
+
+  // ── Administration: pricing ────────────────────────────────────────────
+  Future<void> updateSubjectPricing({
+    required String subjectId,
+    required double basePrice,
+    required int totalHours,
+    required int durationMonths,
+  });
+
+  Future<void> updateTeacherSessionPrice({
+    required String teacherId,
+    required double sessionPrice,
+  });
+
+  Future<void> updateGroupPriceOverride({
+    required String groupId,
+    double? priceOverride,
+  });
+
+  // ── Administration: discounts ──────────────────────────────────────────
+  Future<DiscountRule> addDiscountRule({
+    required DiscountScope scope,
+    required String targetId,
+    required DiscountType type,
+    required double value,
+    String note,
+  });
+
+  Future<void> setDiscountRuleActive(String ruleId, bool active);
+
+  Future<void> deleteDiscountRule(String ruleId);
 
   Future<Student> addStudent({
     required String name,
