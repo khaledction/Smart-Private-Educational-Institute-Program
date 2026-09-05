@@ -65,7 +65,7 @@ class _MainShellState extends State<MainShell> {
     ('لوحة القيادة', 'نظرة شاملة فورية على المعهد'),
     ('الطلاب', 'السجلات الأساسية وملف كل طالب'),
     ('التسجيل والانتظار', 'طلبات الاختيار الحر وقوائم انتظار المدرسين'),
-    ('الدورات والمجموعات', 'عدد المسجلين والإشغال والحسومات'),
+    ('الدورات والمجموعات', 'عدد المسجلين والإشغال والاعتماد المالي'),
     ('المدرسون', 'الإشغال والتقييم والاستحقاقات'),
     ('الجدولة والجلسات', 'الشبكة الأسبوعية بمنع التعارض'),
     ('الحضور والغياب', 'لكل مجموعة على حدة'),
@@ -118,7 +118,7 @@ class _MainShellState extends State<MainShell> {
               const SizedBox(width: 10),
               const Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Text('معهدّي', style: TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.bold)),
-                Text('إدارة المعاهد الذكي • v3.4', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 9.5)),
+                Text('إدارة المعاهد الذكي • v3.6', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 9.5)),
               ]),
             ]),
             const SizedBox(height: 18),
