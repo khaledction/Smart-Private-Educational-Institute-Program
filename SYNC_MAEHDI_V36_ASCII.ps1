@@ -7,7 +7,8 @@ $temp = Join-Path $env:TEMP 'maehdi_sync_v36'
 
 $zipCandidates = @(
   'maehdi_sync_all_v36_finance.zip',
-  'maehdi_sync_all_v36b_finance.zip'
+  'maehdi_sync_all_v36b_finance.zip',
+  'maehdi_sync_all_v36c_hotfix.zip'
 )
 
 $fullZip = $null

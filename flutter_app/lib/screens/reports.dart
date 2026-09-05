@@ -12,7 +12,7 @@ class ReportsScreen extends StatelessWidget {
     final english = kGroups.where((g) => g.name == 'إنجليزي B2 — مسائي أ').first;
     final math = kGroups.where((g) => g.name == 'رياضيات تاسع — مسائي').first;
     final englishSessionRevenue = english.enrolled * english.sessionUnitPrice;
-    final englishSessionTeacher = english.teacherPct <= 0 ? 0 : englishSessionRevenue * english.teacherPct / 100;
+    final englishSessionTeacher = english.teacherPct <= 0 ? 0.0 : englishSessionRevenue * english.teacherPct / 100;
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24),

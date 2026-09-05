@@ -26,7 +26,7 @@ class _TeachersScreenState extends State<TeachersScreen> {
           Expanded(child: StatCard(
               Icons.account_balance,
               'قيد الصرف للمدرسين',
-              money(kTeachers.fold<double>(0, (s, t) => s + pendingCompForTeacher(t.name))),
+              money(kTeachers.fold<double>(0.0, (s, t) => s + pendingCompForTeacher(t.name))),
               color: AppTheme.purple)),
         ]),
         const SizedBox(height: 14),

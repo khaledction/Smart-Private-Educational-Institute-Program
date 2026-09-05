@@ -368,7 +368,7 @@ class _CourseFormState extends State<_CourseForm> {
       widget.existing?.status ?? 'pending', widget.existing?.room ?? 'قاعة 1',
       '$days • $timeByPeriod', price, widget.existing?.sessionsDone ?? 0, total,
       _system!, _system == 'نظام ساعات' ? 0 : _installments,
-      type: _type!, teacherPct: widget.existing?.teacherPct ?? 0,
+      type: _type!, teacherPct: widget.existing?.teacherPct ?? 0.0,
       financeLocked: widget.existing?.financeLocked ?? false,
     );
     if (!_editing) {

@@ -16,19 +16,19 @@ class AccountingScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final groups = kGroups.where((g) => g.status != 'pending').toList();
-    final contractRevenue = groups.fold<double>(0, (s, g) => s + g.revenue);
-    final accruedRevenue = groups.fold<double>(0, (s, g) => s + g.accruedRevenue);
-    final accruedTeacher = groups.fold<double>(0, (s, g) => s + g.accruedTeacherComp);
-    final paidTeacher = kCompNotices.fold<double>(0, (s, n) => s + n.paidAmount);
+    final contractRevenue = groups.fold<double>(0.0, (s, g) => s + g.revenue);
+    final accruedRevenue = groups.fold<double>(0.0, (s, g) => s + g.accruedRevenue);
+    final accruedTeacher = groups.fold<double>(0.0, (s, g) => s + g.accruedTeacherComp);
+    final paidTeacher = kCompNotices.fold<double>(0.0, (s, n) => s + n.paidAmount);
     final pendingTeacher = accruedTeacher - paidTeacher;
-    final totalExpenses = kExpenses.fold<double>(0, (s, e) => s + e.amount);
+    final totalExpenses = kExpenses.fold<double>(0.0, (s, e) => s + e.amount);
     final operatingNet = accruedRevenue - accruedTeacher - totalExpenses;
 
     final revenueBySubject = <String, double>{};
     final costBySubject = <String, double>{};
     for (final g in groups) {
-      revenueBySubject[g.subject] = (revenueBySubject[g.subject] ?? 0) + g.accruedRevenue;
-      costBySubject[g.subject] = (costBySubject[g.subject] ?? 0) + g.accruedTeacherComp;
+      revenueBySubject[g.subject] = (revenueBySubject[g.subject] ?? 0.0) + g.accruedRevenue;
+      costBySubject[g.subject] = (costBySubject[g.subject] ?? 0.0) + g.accruedTeacherComp;
     }
     final subjects = {...revenueBySubject.keys, ...costBySubject.keys}.toList()..sort();
 
@@ -121,17 +121,17 @@ class AccountingScreen extends StatelessWidget {
               for (final subject in subjects)
                 [
                   Text(subject, style: const TextStyle(fontWeight: FontWeight.bold)),
-                  Text(money(revenueBySubject[subject] ?? 0), style: const TextStyle(color: AppTheme.success)),
-                  Text(money(costBySubject[subject] ?? 0), style: const TextStyle(color: AppTheme.danger)),
+                  Text(money(revenueBySubject[subject] ?? 0.0), style: const TextStyle(color: AppTheme.success)),
+                  Text(money(costBySubject[subject] ?? 0.0), style: const TextStyle(color: AppTheme.danger)),
                   Text(
-                    money((revenueBySubject[subject] ?? 0) - (costBySubject[subject] ?? 0)),
+                    money((revenueBySubject[subject] ?? 0.0) - (costBySubject[subject] ?? 0.0)),
                     style: const TextStyle(fontWeight: FontWeight.bold, color: AppTheme.dark),
                   ),
                   Text(
-                    '%${_marginPct(revenueBySubject[subject] ?? 0, costBySubject[subject] ?? 0).toStringAsFixed(0)}',
+                    '%${_marginPct(revenueBySubject[subject] ?? 0.0, costBySubject[subject] ?? 0.0).toStringAsFixed(0)}',
                     style: TextStyle(
                       fontWeight: FontWeight.bold,
-                      color: _marginPct(revenueBySubject[subject] ?? 0, costBySubject[subject] ?? 0) > 70
+                      color: _marginPct(revenueBySubject[subject] ?? 0.0, costBySubject[subject] ?? 0.0) > 70
                           ? AppTheme.gold
                           : AppTheme.textSub,
                     ),
@@ -223,7 +223,7 @@ class AccountingScreen extends StatelessWidget {
   }
 
   double _marginPct(double revenue, double cost) {
-    if (revenue == 0) return 0;
+    if (revenue == 0) return 0.0;
     return ((revenue - cost) / revenue) * 100;
   }
 }

@@ -102,7 +102,7 @@ class Teacher {
       {this.degree = 'جامعة اربع سنوات', this.mobile = '', this.whatsapp = '',
        this.nationalId = '', this.worksGov = false, this.worksOther = false,
        this.mgmtRating = 4.5});
-  double get occupancy => capacity == 0 ? 0 : enrolled / capacity;
+  double get occupancy => capacity == 0 ? 0.0 : enrolled / capacity;
   double get balance => earned - paidOut;
 }
 
@@ -127,22 +127,22 @@ class Group {
       this.price, this.sessionsDone, this.sessionsTotal, this.system, this.installments,
       {this.type = '', this.teacherPct = 0, this.financeLocked = false});
   int get seatsLeft => capacity - enrolled;
-  double get fill => capacity == 0 ? 0 : enrolled / capacity;
+  double get fill => capacity == 0 ? 0.0 : enrolled / capacity;
   bool get isHoursSystem => system == 'نظام ساعات';
   int get executedSessions => sessionsDone < 0 ? 0 : (sessionsDone > sessionsTotal ? sessionsTotal : sessionsDone);
-  double get sessionUnitPrice => isHoursSystem ? price.toDouble() : (sessionsTotal == 0 ? 0 : price / sessionsTotal);
+  double get sessionUnitPrice => isHoursSystem ? price.toDouble() : (sessionsTotal == 0 ? 0.0 : price / sessionsTotal);
   // ===== الإيراد التعاقدي الكامل =====
-  double get revenue => isHoursSystem ? price * sessionsTotal * enrolled : price * enrolled;
+  double get revenue => isHoursSystem ? (price * sessionsTotal * enrolled).toDouble() : (price * enrolled).toDouble();
   // ===== الاعتراف المالي يكون على الجلسات المنفذة فقط =====
   double get accruedRevenue => sessionUnitPrice * executedSessions * enrolled;
-  double get deferredRevenue => revenue > accruedRevenue ? revenue - accruedRevenue : 0;
+  double get deferredRevenue => revenue > accruedRevenue ? revenue - accruedRevenue : 0.0;
   // ===== استحقاق المدرس: إجمالي تعاقدي مقابل مستحق منفذ =====
-  double get teacherComp => teacherPct <= 0 ? 0 : revenue * teacherPct / 100;
-  double get accruedTeacherComp => teacherPct <= 0 ? 0 : accruedRevenue * teacherPct / 100;
-  double get remainingTeacherComp => teacherComp > accruedTeacherComp ? teacherComp - accruedTeacherComp : 0;
+  double get teacherComp => teacherPct <= 0 ? 0.0 : revenue * teacherPct / 100;
+  double get accruedTeacherComp => teacherPct <= 0 ? 0.0 : accruedRevenue * teacherPct / 100;
+  double get remainingTeacherComp => teacherComp > accruedTeacherComp ? teacherComp - accruedTeacherComp : 0.0;
   double get instituteNet => revenue - teacherComp;
   double get instituteNetAccrued => accruedRevenue - accruedTeacherComp;
-  double get instituteMarginPct => accruedRevenue == 0 ? 0 : instituteNetAccrued / accruedRevenue * 100;
+  double get instituteMarginPct => accruedRevenue == 0 ? 0.0 : instituteNetAccrued / accruedRevenue * 100;
 }
 
 final kGroups = <Group>[
@@ -167,19 +167,19 @@ Teacher? teacherByName(String name) {
 bool marginNeedsWarning(double teacherPct) => (100 - teacherPct) > 70;
 
 double approvedCompForCourse(String course) =>
-    kCompNotices.where((n) => n.course == course).fold<double>(0, (s, n) => s + n.amount);
+    kCompNotices.where((n) => n.course == course).fold<double>(0.0, (s, n) => s + n.amount);
 
 double paidCompForCourse(String course) =>
-    kCompNotices.where((n) => n.course == course).fold<double>(0, (s, n) => s + n.paidAmount);
+    kCompNotices.where((n) => n.course == course).fold<double>(0.0, (s, n) => s + n.paidAmount);
 
 double pendingCompForCourse(String course) =>
     approvedCompForCourse(course) - paidCompForCourse(course);
 
 double approvedCompForTeacher(String teacher) =>
-    kCompNotices.where((n) => n.teacher == teacher).fold<double>(0, (s, n) => s + n.amount);
+    kCompNotices.where((n) => n.teacher == teacher).fold<double>(0.0, (s, n) => s + n.amount);
 
 double paidCompForTeacher(String teacher) =>
-    kCompNotices.where((n) => n.teacher == teacher).fold<double>(0, (s, n) => s + n.paidAmount);
+    kCompNotices.where((n) => n.teacher == teacher).fold<double>(0.0, (s, n) => s + n.paidAmount);
 
 double pendingCompForTeacher(String teacher) =>
     approvedCompForTeacher(teacher) - paidCompForTeacher(teacher);
@@ -416,7 +416,7 @@ class CompNotice {
   String status; // معتمد / مصروف
   CompNotice(this.date, this.teacher, this.degree, this.course, this.system,
       this.hours, this.students, this.pct, this.amount, this.status);
-  double get paidAmount => status == 'مصروف' ? amount : 0;
+  double get paidAmount => status == 'مصروف' ? amount : 0.0;
   double get pendingAmount => amount - paidAmount;
 }
 
