@@ -1,7 +1,7 @@
 name: maehdi_app
 description: "معهدّي — نظام إدارة المعاهد التعليمية الذكي (Desktop-First, Flutter)"
 publish_to: 'none'
-version: 3.6.0
+version: 3.7.0
 
 environment:
   sdk: '>=3.3.0 <4.0.0'
@@ -10,10 +10,11 @@ dependencies:
   flutter:
     sdk: flutter
   window_manager: ^0.4.0        # التحكم بنافذة سطح المكتب
-  # المرحلة التالية (ربط قاعدة البيانات المحلية):
+  path_provider: ^2.1.4         # مسار آمن لقاعدة البيانات المحلية
+  sqflite_common_ffi: ^2.3.4+4  # SQLite على Windows/Desktop
+  # المرحلة التالية (عند توسيع الطبقة المحلية إلى كل الوحدات):
   # drift: ^2.20.0
   # sqlite3_flutter_libs: ^0.5.24
-  # path_provider: ^2.1.4
   # riverpod: ^2.5.1
   # flutter_riverpod: ^2.5.1
   # fl_chart: ^0.69.0
