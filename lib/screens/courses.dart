@@ -22,6 +22,7 @@ class _CoursesScreenState extends State<CoursesScreen> {
   String _system = 'الكل';
   String _period = 'الكل';
   String _type = 'الكل';
+  String _capacityState = 'الكل';
   String _view = 'الجارية';
 
   @override
@@ -73,25 +74,34 @@ class _CoursesScreenState extends State<CoursesScreen> {
           'الكل',
           ...kCourseTypes,
           ...store.groups.map((g) => g.type).where((v) => v.trim().isNotEmpty),
-        }.toList();
+        }.toList()..sort();
+        if (typeOptions.remove('الكل')) {
+          typeOptions.insert(0, 'الكل');
+        }
 
-        final completedGroups = store.groups.where((g) => g.isCompleted).toList();
-        final activeGroups = store.groups.where((g) => !g.isCompleted).toList();
-        final sourceGroups = _view == 'المنجزة' ? completedGroups : activeGroups;
+        final currentGroups = store.groups.where(_isCurrentGroup).toList();
+        final endedGroups = store.groups.where(_isEndedGroupOnly).toList();
+        final closedGroups = store.groups.where(_isClosedGroup).toList();
+        final fullGroups = store.groups.where((g) => g.isFull).toList();
+
+        final sourceGroups = switch (_view) {
+          'المنتهية' => endedGroups,
+          'المغلقة' => closedGroups,
+          _ => currentGroups,
+        };
 
         final groups = sourceGroups.where((g) {
           final sysOk = _system == 'الكل' || g.system == _system;
           final perOk = _period == 'الكل' || g.period == _period;
           final typeOk = _type == 'الكل' || g.type == _type;
+          final capacityOk = _capacityState == 'الكل' || (_capacityState == 'مكتملة' ? g.isFull : !g.isFull);
           final text = '${g.name} ${g.subject} ${g.teacher} ${g.room}';
           final searchOk = search.isEmpty || text.contains(search);
-          return sysOk && perOk && typeOk && searchOk;
+          return sysOk && perOk && typeOk && capacityOk && searchOk;
         }).toList();
 
-        final fullCourses = activeGroups.where((g) => !g.isHoursSystem).length;
-        final hoursSystem = activeGroups.where((g) => g.isHoursSystem).length;
-        final totalEnrolled = activeGroups.fold<int>(0, (s, g) => s + g.enrolled);
-        final totalWaiting = activeGroups.fold<int>(0, (s, g) => s + g.waiting);
+        final totalEnrolled = currentGroups.fold<int>(0, (s, g) => s + g.enrolled);
+        final totalWaiting = currentGroups.fold<int>(0, (s, g) => s + g.waiting);
 
         return SingleChildScrollView(
           padding: const EdgeInsets.all(24),
@@ -146,38 +156,124 @@ class _CoursesScreenState extends State<CoursesScreen> {
               ]),
             ),
             const SizedBox(height: 16),
-            Row(children: [
-              Expanded(child: StatCard(Icons.auto_stories, 'كورسات جارية', '$fullCourses', trend: 'المقصود هنا الدورات غير المنجزة بعد')),
-              Expanded(child: StatCard(Icons.bolt, 'نظام ساعات جارٍ', '$hoursSystem', color: AppTheme.gold, trend: 'تمييز مستقل داخل البيانات الحقيقية')),
-              Expanded(child: StatCard(Icons.groups, 'إجمالي المسجلين الجاريين', '$totalEnrolled', color: AppTheme.success)),
-              Expanded(child: StatCard(Icons.check_circle_outline, 'الدورات المنجزة', '${completedGroups.length}', color: AppTheme.purple)),
-            ]),
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final width = constraints.maxWidth;
+                final statWidth = width >= 1200
+                    ? (width - 42) / 4
+                    : (width >= 760 ? (width - 14) / 2 : width);
+                return Wrap(
+                  spacing: 14,
+                  runSpacing: 14,
+                  children: [
+                    SizedBox(width: statWidth, child: StatCard(Icons.play_circle_outline, 'الدورات الجارية', '${currentGroups.length}', color: AppTheme.seed, trend: 'تشمل المفتوحة والجارية قبل الإنهاء')),
+                    SizedBox(width: statWidth, child: StatCard(Icons.assignment_turned_in_outlined, 'الدورات المنتهية', '${endedGroups.length}', color: AppTheme.purple, trend: 'انتهى زمنها أو عدد جلساتها')),
+                    SizedBox(width: statWidth, child: StatCard(Icons.groups_3_outlined, 'الدورات المكتملة', '${fullGroups.length}', color: AppTheme.gold, trend: 'بلغت الحد الأقصى للطلاب')),
+                    SizedBox(width: statWidth, child: StatCard(Icons.lock_outline, 'الدورات المغلقة', '${closedGroups.length}', color: AppTheme.dark2, trend: 'أغلقت بعد التصفية المالية')),
+                  ],
+                );
+              },
+            ),
             const SizedBox(height: 16),
-            Row(children: [
-              _viewChip('الجارية', activeGroups.length, AppTheme.seed),
-              const SizedBox(width: 8),
-              _viewChip('المنجزة', completedGroups.length, AppTheme.purple),
-              const Spacer(),
-              if (_view == 'الجارية')
-                Text('في الانتظار حاليًا: $totalWaiting',
-                    style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.bold, color: AppTheme.danger)),
-            ]),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                _viewChip('الجارية', currentGroups.length, AppTheme.seed),
+                _viewChip('المنتهية', endedGroups.length, AppTheme.purple),
+                _viewChip('المغلقة', closedGroups.length, AppTheme.dark2),
+                if (_view == 'الجارية')
+                  Padding(
+                    padding: const EdgeInsets.only(right: 6),
+                    child: Text('في الانتظار حاليًا: $totalWaiting',
+                        style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.bold, color: AppTheme.danger)),
+                  ),
+              ],
+            ),
             const SizedBox(height: 14),
-            Wrap(crossAxisAlignment: WrapCrossAlignment.center, spacing: 14, runSpacing: 10, children: [
-              _filterGroup('النظام:', ['الكل', ...kSystems], _system, AppTheme.purple,
-                  (v) => setState(() => _system = v)),
-              _filterGroup('الفترة:', ['الكل', ...kPeriods], _period, AppTheme.seed,
-                  (v) => setState(() => _period = v)),
-              _filterGroup('النوع:', typeOptions, _type, AppTheme.success,
-                  (v) => setState(() => _type = v)),
-              SizedBox(
-                width: 300,
-                child: TextField(
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: cardDeco(),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                const Text('مرشحات العرض',
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppTheme.dark)),
+                const SizedBox(height: 6),
+                const Text(
+                  'تم اعتماد الحالات الرئيسية: جارية، منتهية، مغلقة. أما مكتملة فهي صفة سعة إضافية ويمكن تصفيتها من هنا دون مزاحمة مربع البحث.',
+                  style: TextStyle(fontSize: 12, color: AppTheme.textSub),
+                ),
+                const SizedBox(height: 14),
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    final width = constraints.maxWidth;
+                    final fieldWidth = width >= 1180
+                        ? (width - 24) / 4
+                        : (width >= 760 ? (width - 12) / 2 : width);
+                    return Wrap(
+                      spacing: 12,
+                      runSpacing: 12,
+                      children: [
+                        SizedBox(
+                          width: fieldWidth,
+                          child: _filterDropdown(
+                            label: 'النظام',
+                            color: AppTheme.purple,
+                            items: ['الكل', ...kSystems],
+                            value: _system,
+                            onChanged: (v) => setState(() => _system = v ?? 'الكل'),
+                          ),
+                        ),
+                        SizedBox(
+                          width: fieldWidth,
+                          child: _filterDropdown(
+                            label: 'الفترة',
+                            color: AppTheme.seed,
+                            items: ['الكل', ...kPeriods],
+                            value: _period,
+                            onChanged: (v) => setState(() => _period = v ?? 'الكل'),
+                          ),
+                        ),
+                        SizedBox(
+                          width: fieldWidth,
+                          child: _filterDropdown(
+                            label: 'النوع',
+                            color: AppTheme.success,
+                            items: typeOptions,
+                            value: _type,
+                            onChanged: (v) => setState(() => _type = v ?? 'الكل'),
+                          ),
+                        ),
+                        SizedBox(
+                          width: fieldWidth,
+                          child: _filterDropdown(
+                            label: 'السعة',
+                            color: AppTheme.gold,
+                            items: const ['الكل', 'مكتملة', 'متاح'],
+                            value: _capacityState,
+                            onChanged: (v) => setState(() => _capacityState = v ?? 'الكل'),
+                          ),
+                        ),
+                      ],
+                    );
+                  },
+                ),
+                const SizedBox(height: 14),
+                TextField(
                   controller: _search,
                   onChanged: (_) => setState(() {}),
                   decoration: InputDecoration(
-                    hintText: 'ابحث باسم الدورة أو المادة أو المدرس...',
+                    hintText: 'ابحث باسم الدورة أو المادة أو المدرس أو القاعة...',
                     prefixIcon: const Icon(Icons.search),
+                    suffixIcon: _search.text.trim().isEmpty
+                        ? null
+                        : IconButton(
+                            onPressed: () {
+                              _search.clear();
+                              setState(() {});
+                            },
+                            icon: const Icon(Icons.close),
+                          ),
                     isDense: true,
                     filled: true,
                     fillColor: AppTheme.surface,
@@ -187,11 +283,11 @@ class _CoursesScreenState extends State<CoursesScreen> {
                     ),
                   ),
                 ),
-              ),
-            ]),
+              ]),
+            ),
             const Divider(height: 26),
-            if (_view == 'المنجزة') ...[
-              _CompletedCoursesSummary(groups: completedGroups),
+            if (_view == 'المنتهية') ...[
+              _CompletedCoursesSummary(groups: endedGroups),
               const SizedBox(height: 16),
             ],
             Row(children: [
@@ -216,24 +312,32 @@ class _CoursesScreenState extends State<CoursesScreen> {
                 padding: const EdgeInsets.all(28),
                 child: Column(children: [
                   Icon(
-                    _view == 'المنجزة' ? Icons.assignment_turned_in_outlined : Icons.school_outlined,
+                    _view == 'المغلقة'
+                        ? Icons.lock_outline
+                        : (_view == 'المنتهية' ? Icons.assignment_turned_in_outlined : Icons.school_outlined),
                     size: 42,
-                    color: _view == 'المنجزة' ? AppTheme.purple : AppTheme.seed,
+                    color: _view == 'المغلقة'
+                        ? AppTheme.dark2
+                        : (_view == 'المنتهية' ? AppTheme.purple : AppTheme.seed),
                   ),
                   const SizedBox(height: 10),
                   Text(
-                    _view == 'المنجزة' ? 'لا توجد دورات منجزة بعد' : 'قاعدة الدورات الجارية فارغة حاليًا',
+                    _view == 'المغلقة'
+                        ? 'لا توجد دورات مغلقة بعد'
+                        : (_view == 'المنتهية' ? 'لا توجد دورات منتهية بعد' : 'قاعدة الدورات الجارية فارغة حاليًا'),
                     style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppTheme.dark),
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    _view == 'المنجزة'
-                        ? 'عندما تُعلن الدورة منجزة أو تُغلق أو تصل إلى كامل جلساتها ستظهر هنا مع ملخص تقريري سريع.'
-                        : 'ابدأ التجربة الحقيقية من الصفر: أنشئ دورة، ثم أضف طالبًا، ثم قدّم طلب التسجيل واعتمده.',
+                    _view == 'المغلقة'
+                        ? 'عندما تنتهي التصفية المالية وتُقفل الدورة نهائيًا ستظهر هنا.'
+                        : (_view == 'المنتهية'
+                            ? 'عندما ينتهي المسار الزمني أو عدد الساعات المعتمدة ستظهر الدورة هنا مع ملخص تقريري سريع.'
+                            : 'ابدأ التجربة الحقيقية من الصفر: أنشئ دورة، ثم أضف طالبًا، ثم قدّم طلب التسجيل واعتمده.'),
                     textAlign: TextAlign.center,
                     style: const TextStyle(fontSize: 12.5, color: AppTheme.textSub),
                   ),
-                  if (_view != 'المنجزة') ...[
+                  if (_view == 'الجارية') ...[
                     const SizedBox(height: 14),
                     PrimaryButton(
                       'ابدأ بإنشاء أول دورة',
@@ -320,38 +424,60 @@ class _CoursesScreenState extends State<CoursesScreen> {
     );
   }
 
-  Widget _filterGroup(
-    String label,
-    List<String> items,
-    String current,
-    Color color,
-    void Function(String) onSelect,
-  ) {
-    return Row(mainAxisSize: MainAxisSize.min, children: [
-      Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppTheme.dark2)),
-      const SizedBox(width: 6),
-      for (final f in items)
-        Padding(
-          padding: const EdgeInsets.only(left: 5),
-          child: ChoiceChip(
-            label: Text(
-              f == 'الكل'
-                  ? 'الكل'
-                  : (f == 'صباحي' ? '☀ صباحي' : (f == 'ظهر' ? '🌤 ظهر' : (f == 'مسائي' ? '🌙 مسائي' : f))),
-              style: const TextStyle(fontSize: 11.5),
+  bool _isClosedGroup(GroupOption group) => group.status == 'closed' || group.financeLocked;
+
+  bool _isEndedGroup(GroupOption group) =>
+      group.status == 'completed' || (group.sessionsTotal > 0 && group.executedSessions >= group.sessionsTotal);
+
+  bool _isEndedGroupOnly(GroupOption group) => _isEndedGroup(group) && !_isClosedGroup(group);
+
+  bool _isCurrentGroup(GroupOption group) => !_isEndedGroup(group) && !_isClosedGroup(group);
+
+  String _displayOptionLabel(String value) {
+    if (value == 'الكل') return 'الكل';
+    if (value == 'صباحي') return '☀ صباحي';
+    if (value == 'ظهر') return '🌤 ظهر';
+    if (value == 'مسائي') return '🌙 مسائي';
+    return value;
+  }
+
+  Widget _filterDropdown({
+    required String label,
+    required Color color,
+    required List<String> items,
+    required String value,
+    required void Function(String?) onChanged,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.bold, color: color)),
+        const SizedBox(height: 6),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: color.withOpacity(.25)),
+          ),
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<String>(
+              value: items.contains(value) ? value : items.first,
+              isExpanded: true,
+              icon: Icon(Icons.keyboard_arrow_down_rounded, color: color),
+              items: [
+                for (final item in items)
+                  DropdownMenuItem(
+                    value: item,
+                    child: Text(_displayOptionLabel(item), style: const TextStyle(fontSize: 12.5)),
+                  ),
+              ],
+              onChanged: onChanged,
             ),
-            selected: current == f,
-            selectedColor: color.withOpacity(.15),
-            labelStyle: TextStyle(
-              fontSize: 11.5,
-              fontWeight: FontWeight.bold,
-              color: current == f ? color : AppTheme.textSub,
-            ),
-            side: BorderSide(color: current == f ? color.withOpacity(.5) : AppTheme.line),
-            onSelected: (_) => onSelect(f),
           ),
         ),
-    ]);
+      ],
+    );
   }
 }
 
@@ -417,7 +543,8 @@ class _GroupCardState extends State<_GroupCard> {
             Wrap(spacing: 6, runSpacing: 6, children: [
               StatusChip(g.system, color: g.isHoursSystem ? AppTheme.gold : AppTheme.seed),
               if (g.type.trim().isNotEmpty) StatusChip(g.type, color: AppTheme.success),
-              StatusChip(_statusLabel(g.status), color: _statusColor(g.status)),
+              StatusChip(_coursePhaseLabel(g), color: _coursePhaseColor(g)),
+              if (g.isFull) const StatusChip('مكتملة', color: AppTheme.gold),
               CountBadge('انتظار', g.waiting),
               if (g.financeLocked) const StatusChip('🔒 قفل مالي', color: AppTheme.dark2),
             ]),
@@ -547,7 +674,8 @@ class _CourseDetailsPanelState extends State<_CourseDetailsPanel> {
             Wrap(spacing: 6, runSpacing: 6, children: [
               StatusChip(g.system, color: g.isHoursSystem ? AppTheme.gold : AppTheme.seed),
               if (g.type.trim().isNotEmpty) StatusChip(g.type, color: AppTheme.success),
-              StatusChip(_statusLabel(g.status), color: _statusColor(g.status)),
+              StatusChip(_coursePhaseLabel(g), color: _coursePhaseColor(g)),
+              if (g.isFull) const StatusChip('مكتملة', color: AppTheme.gold),
               if (g.financeLocked) const StatusChip('🔒 قفل مالي', color: AppTheme.dark2),
             ]),
             const SizedBox(height: 16),
@@ -741,18 +869,18 @@ class _CompletedCoursesSummary extends StatelessWidget {
       decoration: cardDeco(),
       padding: const EdgeInsets.all(16),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const Text('ملخص أولي للدورات المنجزة',
+        const Text('ملخص أولي للدورات المنتهية',
             style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: AppTheme.dark)),
         const SizedBox(height: 6),
         const Text(
-          'هذا تبويب تأسيسي للتقارير: يُظهر المواد المنجزة وعدد الطلاب والمدرسين. ويمكن لاحقًا توسيعه إلى فرز شهري وربط محاسبي كامل.',
+          'هذا تبويب تأسيسي للتقارير: يُظهر المواد المنتهية وعدد الطلاب والمدرسين. ويمكن لاحقًا توسيعه إلى فرز شهري وربط محاسبي كامل.',
           style: TextStyle(fontSize: 12, color: AppTheme.textSub),
         ),
         const SizedBox(height: 14),
         Row(children: [
-          Expanded(child: StatCard(Icons.assignment_turned_in, 'الدورات المنجزة', '${groups.length}', color: AppTheme.purple)),
-          Expanded(child: StatCard(Icons.menu_book, 'المواد المنجزة', '${bySubject.length}', color: AppTheme.seed)),
-          Expanded(child: StatCard(Icons.groups_2, 'الطلاب عبر الدورات المنجزة', '${groups.fold<int>(0, (s, g) => s + g.enrolled)}', color: AppTheme.success)),
+          Expanded(child: StatCard(Icons.assignment_turned_in, 'الدورات المنتهية', '${groups.length}', color: AppTheme.purple)),
+          Expanded(child: StatCard(Icons.menu_book, 'المواد المنتهية', '${bySubject.length}', color: AppTheme.seed)),
+          Expanded(child: StatCard(Icons.groups_2, 'الطلاب عبر الدورات المنتهية', '${groups.fold<int>(0, (s, g) => s + g.enrolled)}', color: AppTheme.success)),
           Expanded(child: StatCard(Icons.co_present, 'المدرسون المشاركون', '${groups.map((g) => g.teacher).toSet().length}', color: AppTheme.gold)),
         ]),
         const SizedBox(height: 14),
@@ -760,7 +888,7 @@ class _CompletedCoursesSummary extends StatelessWidget {
           const Text('لا توجد بيانات تقريرية بعد.', style: TextStyle(fontSize: 12.5, color: AppTheme.textSub))
         else
           SimpleTable(
-            columns: const ['المادة', 'عدد الدورات المنجزة', 'عدد الطلاب', 'عدد المدرسين'],
+            columns: const ['المادة', 'عدد الدورات المنتهية', 'عدد الطلاب', 'عدد المدرسين'],
             rows: [
               for (final row in rows)
                 [
@@ -1180,34 +1308,24 @@ class _CourseFormState extends State<_CourseForm> {
   }
 }
 
-String _statusLabel(String status) {
-  switch (status) {
-    case 'running':
-      return 'منطلقة';
-    case 'completed':
-      return 'منجزة';
-    case 'closed':
-      return 'مغلقة';
-    case 'pending':
-      return 'بانتظار اعتماد';
-    default:
-      return 'مفتوحة';
+String _coursePhaseLabel(GroupOption group) {
+  if (group.status == 'closed' || group.financeLocked) return 'مغلقة';
+  if (group.status == 'completed' || (group.sessionsTotal > 0 && group.executedSessions >= group.sessionsTotal)) {
+    return 'منتهية';
   }
+  if (group.status == 'running') return 'جارية';
+  if (group.status == 'pending') return 'بانتظار اعتماد';
+  return 'مفتوحة';
 }
 
-Color _statusColor(String status) {
-  switch (status) {
-    case 'running':
-      return AppTheme.success;
-    case 'completed':
-      return AppTheme.purple;
-    case 'closed':
-      return AppTheme.dark2;
-    case 'pending':
-      return AppTheme.gold;
-    default:
-      return AppTheme.seed;
+Color _coursePhaseColor(GroupOption group) {
+  if (group.status == 'closed' || group.financeLocked) return AppTheme.dark2;
+  if (group.status == 'completed' || (group.sessionsTotal > 0 && group.executedSessions >= group.sessionsTotal)) {
+    return AppTheme.purple;
   }
+  if (group.status == 'running') return AppTheme.success;
+  if (group.status == 'pending') return AppTheme.gold;
+  return AppTheme.seed;
 }
 
 String _fmtDate(String raw) {
