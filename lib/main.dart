@@ -122,7 +122,7 @@ class _MainShellState extends State<MainShell> {
               const SizedBox(width: 10),
               const Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Text('معهدّي', style: TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.bold)),
-                Text('إدارة المعاهد الذكي • v3.8-fix8', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 9.5)),
+                Text('إدارة المعاهد الذكي • v3.8-fix9', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 9.5)),
               ]),
             ]),
             const SizedBox(height: 18),

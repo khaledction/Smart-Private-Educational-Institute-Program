@@ -38,13 +38,24 @@ class TeacherOption {
   final String name;
   final String specialization;
   final String degree;
-  const TeacherOption({required this.id, required this.name, required this.specialization, required this.degree});
+  final String mobile;
+  final String whatsapp;
+  const TeacherOption({
+    required this.id,
+    required this.name,
+    required this.specialization,
+    required this.degree,
+    required this.mobile,
+    required this.whatsapp,
+  });
 
   factory TeacherOption.fromMap(Map<String, Object?> map) => TeacherOption(
         id: map['id'] as int,
         name: map['full_name'] as String,
         specialization: map['specialization'] as String? ?? '',
         degree: map['degree'] as String? ?? '—',
+        mobile: map['mobile'] as String? ?? '',
+        whatsapp: map['whatsapp'] as String? ?? '',
       );
 }
 
@@ -428,6 +439,60 @@ class RegistrationStore extends ChangeNotifier {
       return const ActionResult(true, '🧹 تم تفريغ قاعدة البيانات المحلية بالكامل. يمكنك الآن بدء دورة حياة التسجيل من الصفر.');
     } catch (e) {
       return ActionResult(false, 'تعذر تفريغ قاعدة البيانات: $e');
+    } finally {
+      _setBusy(false);
+    }
+  }
+
+  Future<ActionResult> saveTeacher({
+    required String name,
+    required String specialization,
+    required String degree,
+    required String mobile,
+    required String whatsapp,
+  }) async {
+    try {
+      _setBusy(true);
+      final db = await _db.database;
+      final normalizedName = name.trim();
+      final normalizedSpec = specialization.trim();
+      final normalizedDegree = degree.trim().isEmpty ? '—' : degree.trim();
+      final normalizedMobile = mobile.trim();
+      final normalizedWhatsapp = whatsapp.trim().isEmpty ? normalizedMobile : whatsapp.trim();
+
+      if (normalizedName.isEmpty || normalizedSpec.isEmpty || normalizedMobile.isEmpty) {
+        return const ActionResult(false, 'أكمل الاسم والاختصاص والموبايل قبل حفظ المدرس.');
+      }
+
+      final duplicate = await db.query(
+        'teachers',
+        columns: ['id'],
+        where: 'full_name = ?',
+        whereArgs: [normalizedName],
+        limit: 1,
+      );
+      if (duplicate.isNotEmpty) {
+        return const ActionResult(false, 'يوجد مدرس محفوظ مسبقًا بنفس الاسم.');
+      }
+
+      await _ensureSubject(db, normalizedSpec);
+      final id = await db.insert(
+        'teachers',
+        {
+          'full_name': normalizedName,
+          'specialization': normalizedSpec,
+          'degree': normalizedDegree,
+          'mobile': normalizedMobile,
+          'whatsapp': normalizedWhatsapp,
+        },
+        conflictAlgorithm: ConflictAlgorithm.ignore,
+      );
+      await _log(db, 'teacher.create', 'teacher', id, 'تم إنشاء مدرس جديد وحفظه في قاعدة البيانات المحلية.');
+
+      await refresh();
+      return const ActionResult(true, '✅ تم حفظ المدرس في قاعدة البيانات المحلية.');
+    } catch (e) {
+      return ActionResult(false, 'تعذر حفظ المدرس: $e');
     } finally {
       _setBusy(false);
     }
@@ -1074,13 +1139,6 @@ class RegistrationStore extends ChangeNotifier {
     if (value == 'صباحي') return 'الفترة الصباحية';
     if (value == 'ظهر') return 'فترة الظهر';
     return 'الفترة المسائية';
-  }
-
-  GroupOption? _findGroup({required int subjectId, required int? teacherId, required String period}) {
-    final group = _findAnyGroup(subjectId: subjectId, teacherId: teacherId, period: period);
-    if (group == null) return null;
-    if (!group.isOpenForRegistration || group.isFull) return null;
-    return group;
   }
 
   GroupOption? _findAnyGroup({required int subjectId, required int? teacherId, required String period}) {
