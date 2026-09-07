@@ -404,7 +404,8 @@ void showSidePanel(BuildContext context,
 class InfoRow extends StatelessWidget {
   final String label, value;
   final Color? valueColor;
-  const InfoRow(this.label, this.value, {super.key, this.valueColor});
+  final double valueFontSize;
+  const InfoRow(this.label, this.value, {super.key, this.valueColor, this.valueFontSize = 12.5});
 
   @override
   Widget build(BuildContext context) {
@@ -415,7 +416,7 @@ class InfoRow extends StatelessWidget {
         const Spacer(),
         Text(value,
             style: TextStyle(
-                fontSize: 12.5,
+                fontSize: valueFontSize,
                 fontWeight: FontWeight.bold,
                 color: valueColor ?? AppTheme.dark)),
       ]),

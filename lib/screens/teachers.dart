@@ -112,12 +112,24 @@ class _TeachersScreenState extends State<TeachersScreen> {
         return SingleChildScrollView(
           padding: const EdgeInsets.all(24),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Row(children: [
-              Expanded(child: StatCard(Icons.co_present, 'عدد المدرسين', '${teachers.length}')),
-              Expanded(child: StatCard(Icons.groups, 'الطلاب لديهم', '$totalEnrolled', color: AppTheme.success)),
-              Expanded(child: StatCard(Icons.hourglass_top, 'في انتظار مقعد', '$totalWaiting', color: AppTheme.gold)),
-              Expanded(child: StatCard(Icons.account_balance, 'قيد الصرف للمدرسين', money(totalPending), color: AppTheme.purple)),
-            ]),
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final width = constraints.maxWidth;
+                final statWidth = width >= 1200
+                    ? (width - 42) / 4
+                    : (width >= 760 ? (width - 14) / 2 : width);
+                return Wrap(
+                  spacing: 14,
+                  runSpacing: 14,
+                  children: [
+                    SizedBox(width: statWidth, child: StatCard(Icons.co_present, 'عدد المدرسين', '${teachers.length}')),
+                    SizedBox(width: statWidth, child: StatCard(Icons.groups, 'الطلاب لديهم', '$totalEnrolled', color: AppTheme.success)),
+                    SizedBox(width: statWidth, child: StatCard(Icons.hourglass_top, 'في انتظار مقعد', '$totalWaiting', color: AppTheme.gold)),
+                    SizedBox(width: statWidth, child: StatCard(Icons.account_balance, 'قيد الصرف للمدرسين', money(totalPending), color: AppTheme.purple)),
+                  ],
+                );
+              },
+            ),
             const SizedBox(height: 14),
             Container(
               padding: const EdgeInsets.all(12),
@@ -126,19 +138,25 @@ class _TeachersScreenState extends State<TeachersScreen> {
                 borderRadius: BorderRadius.circular(14),
                 border: Border.all(color: AppTheme.danger.withOpacity(.18)),
               ),
-              child: Row(children: [
-                const Icon(Icons.storage_outlined, color: AppTheme.danger),
-                const SizedBox(width: 10),
-                const Expanded(
-                  child: Text(
-                    'زر مؤقت: تهيئة قاعدة فارغة. بما أن هذه الشاشة مربوطة الآن فعليًا بقاعدة البيانات، فستختفي منها السجلات مباشرة بعد التفريغ.',
-                    style: TextStyle(fontSize: 12.5, color: AppTheme.danger, fontWeight: FontWeight.bold),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Row(children: const [
+                  Icon(Icons.storage_outlined, color: AppTheme.danger),
+                  SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'زر مؤقت: تهيئة قاعدة فارغة. بما أن هذه الشاشة مربوطة الآن فعليًا بقاعدة البيانات، فستختفي منها السجلات مباشرة بعد التفريغ.',
+                      style: TextStyle(fontSize: 12.5, color: AppTheme.danger, fontWeight: FontWeight.bold),
+                    ),
                   ),
-                ),
-                TextButton.icon(
-                  onPressed: _resettingDb ? null : _resetDatabase,
-                  icon: const Icon(Icons.cleaning_services_outlined, size: 16),
-                  label: Text(_resettingDb ? 'جارٍ التهيئة...' : 'تهيئة قاعدة فارغة', style: const TextStyle(fontSize: 12)),
+                ]),
+                const SizedBox(height: 8),
+                Align(
+                  alignment: AlignmentDirectional.centerEnd,
+                  child: TextButton.icon(
+                    onPressed: _resettingDb ? null : _resetDatabase,
+                    icon: const Icon(Icons.cleaning_services_outlined, size: 16),
+                    label: Text(_resettingDb ? 'جارٍ التهيئة...' : 'تهيئة قاعدة فارغة', style: const TextStyle(fontSize: 12)),
+                  ),
                 ),
               ]),
             ),
@@ -150,26 +168,29 @@ class _TeachersScreenState extends State<TeachersScreen> {
               ),
             ],
             const SizedBox(height: 14),
-            Row(children: [
-              Text('كادر المدرسين (${teachers.length})',
-                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: AppTheme.dark)),
-              const Spacer(),
-              TextButton.icon(
-                onPressed: store.isBusy ? null : () => store.refresh(),
-                icon: const Icon(Icons.refresh, size: 16),
-                label: const Text('تحديث', style: TextStyle(fontSize: 12)),
-              ),
-              const SizedBox(width: 8),
-              PrimaryButton(
-                'إضافة مدرس جديد',
-                icon: Icons.person_add_alt,
-                onPressed: () => showSidePanel(
-                  context,
-                  title: 'إضافة مدرس جديد',
-                  builder: (_) => _NewTeacherForm(onSaved: () => store.refresh()),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                Text('كادر المدرسين (${teachers.length})',
+                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: AppTheme.dark)),
+                TextButton.icon(
+                  onPressed: store.isBusy ? null : () => store.refresh(),
+                  icon: const Icon(Icons.refresh, size: 16),
+                  label: const Text('تحديث', style: TextStyle(fontSize: 12)),
                 ),
-              ),
-            ]),
+                PrimaryButton(
+                  'إضافة مدرس جديد',
+                  icon: Icons.person_add_alt,
+                  onPressed: () => showSidePanel(
+                    context,
+                    title: 'إضافة مدرس جديد',
+                    builder: (_) => _NewTeacherForm(onSaved: () => store.refresh()),
+                  ),
+                ),
+              ],
+            ),
             const SizedBox(height: 12),
             if (teachers.isEmpty)
               Container(
@@ -187,13 +208,21 @@ class _TeachersScreenState extends State<TeachersScreen> {
                 ]),
               )
             else
-              GridView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                    maxCrossAxisExtent: 420, mainAxisExtent: 290, crossAxisSpacing: 14, mainAxisSpacing: 14),
-                itemCount: teachers.length,
-                itemBuilder: (_, i) => _TeacherCard(teachers[i]),
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final width = constraints.maxWidth;
+                  final cardWidth = width >= 1260
+                      ? (width - 28) / 3
+                      : (width >= 840 ? (width - 14) / 2 : width);
+                  return Wrap(
+                    spacing: 14,
+                    runSpacing: 14,
+                    children: [
+                      for (final teacher in teachers)
+                        SizedBox(width: cardWidth, child: _TeacherCard(teacher)),
+                    ],
+                  );
+                },
               ),
           ]),
         );
@@ -268,7 +297,10 @@ class _TeacherCard extends StatelessWidget {
     return Container(
       decoration: cardDeco(),
       padding: const EdgeInsets.all(16),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
         Row(children: [
           CircleAvatar(
             radius: 22,
@@ -332,7 +364,7 @@ class _TeacherCard extends StatelessWidget {
             ]),
           ]),
         ),
-        const Spacer(),
+        const SizedBox(height: 10),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
           decoration: BoxDecoration(

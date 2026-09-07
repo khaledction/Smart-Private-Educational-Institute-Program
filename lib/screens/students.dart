@@ -725,34 +725,36 @@ class _NewStudentFormState extends State<_NewStudentForm> {
                 const Text('نظام المادة الحالية',
                     style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.bold, color: AppTheme.dark2)),
                 const SizedBox(height: 8),
-                Row(children: [
-                  for (final sys in kSystems)
-                    Padding(
-                      padding: const EdgeInsets.only(left: 8),
-                      child: ChoiceChip(
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    for (final sys in kSystems)
+                      ChoiceChip(
                         label: Text(sys == 'كورس كامل' ? '📚 كورس كامل' : '⚡ نظام ساعات'),
                         selected: _system == sys,
                         selectedColor: AppTheme.seed.withOpacity(.15),
                         onSelected: (_) => setState(() => _system = sys),
                       ),
-                    ),
-                ]),
+                  ],
+                ),
                 const SizedBox(height: 14),
                 const Text('الفترة المفضلة للمادة الحالية',
                     style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.bold, color: AppTheme.dark2)),
                 const SizedBox(height: 8),
-                Row(children: [
-                  for (final p in kPeriods)
-                    Padding(
-                      padding: const EdgeInsets.only(left: 8),
-                      child: ChoiceChip(
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    for (final p in kPeriods)
+                      ChoiceChip(
                         label: Text(p == 'صباحي' ? '☀ صباحي' : (p == 'ظهر' ? '🌤 ع الظهر' : '🌙 مسائي')),
                         selected: _period == p,
                         selectedColor: AppTheme.seed.withOpacity(.15),
                         onSelected: (_) => setState(() => _period = p),
                       ),
-                    ),
-                ]),
+                  ],
+                ),
                 const SizedBox(height: 14),
                 if (_system == 'كورس كامل') ...[
                   _field('رسم الدورة لهذه المادة *', _courseFee, 'مثال: 180000'),
@@ -764,11 +766,25 @@ class _NewStudentFormState extends State<_NewStudentForm> {
                         style: TextStyle(fontSize: 11.5, color: AppTheme.purple, fontWeight: FontWeight.bold)),
                   ),
                 ] else ...[
-                  Row(children: [
-                    Expanded(child: _field('عدد الساعات *', _hoursCount, 'مثال: 12')),
-                    const SizedBox(width: 12),
-                    Expanded(child: _field('قيمة الساعة *', _hourRate, 'مثال: 15000')),
-                  ]),
+                  LayoutBuilder(
+                    builder: (context, constraints) {
+                      final compact = constraints.maxWidth < 560;
+                      if (compact) {
+                        return Column(
+                          children: [
+                            _field('عدد الساعات *', _hoursCount, 'مثال: 12'),
+                            const SizedBox(height: 12),
+                            _field('قيمة الساعة *', _hourRate, 'مثال: 15000'),
+                          ],
+                        );
+                      }
+                      return Row(children: [
+                        Expanded(child: _field('عدد الساعات *', _hoursCount, 'مثال: 12')),
+                        const SizedBox(width: 12),
+                        Expanded(child: _field('قيمة الساعة *', _hourRate, 'مثال: 15000')),
+                      ]);
+                    },
+                  ),
                   const SizedBox(height: 8),
                   Container(
                     padding: const EdgeInsets.all(10),
@@ -813,8 +829,8 @@ class _NewStudentFormState extends State<_NewStudentForm> {
                     style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppTheme.dark)),
                 const SizedBox(height: 10),
                 InfoRow('مطلوب هذه المادة', money(currentAmount), valueColor: AppTheme.gold),
-                InfoRow('إجمالي المطلوب حتى الآن', money(_accumulatedRequired), valueColor: AppTheme.success),
-                InfoRow('الإجمالي بعد حفظ المادة الحالية', money(totalWithCurrent), valueColor: AppTheme.purple),
+                InfoRow('إجمالي المطلوب حتى الآن', money(_accumulatedRequired), valueColor: AppTheme.success, valueFontSize: 13.5),
+                InfoRow('الإجمالي بعد حفظ المادة الحالية', money(totalWithCurrent), valueColor: AppTheme.purple, valueFontSize: 15.5),
               ]),
             ),
             if (_savedMaterials.isNotEmpty) ...[
@@ -864,7 +880,7 @@ class _NewStudentFormState extends State<_NewStudentForm> {
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
-                      'تم حفظ البيانات والتسجيل في المادة الأخيرة. هل ترغب بتسجيل مواد أخرى؟ يمكنك المتابعة من النافذة نفسها أو الضغط على زر "اكتملت عملية التسجيل".',
+                      'تم حفظ البيانات والتسجيل في المادة الأخيرة. هل ترغب بتسجيل مواد أخرى؟ يمكنك المتابعة من النافذة نفسها أو الضغط على زر "حفظ وإتمام عملية التسجيل".',
                       style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppTheme.success),
                     ),
                   ),
@@ -877,24 +893,53 @@ class _NewStudentFormState extends State<_NewStudentForm> {
                 padding: const EdgeInsets.only(bottom: 10),
                 child: Text(_msg, style: TextStyle(color: _msgColor, fontWeight: FontWeight.bold)),
               ),
-            Row(children: [
-              Expanded(
-                child: PrimaryButton(
-                  (store.isBusy || regStore.isBusy) ? 'جارٍ الحفظ...' : 'حفظ المادة الحالية وإضافة أخرى',
-                  icon: Icons.playlist_add,
-                  onPressed: (store.isBusy || regStore.isBusy) ? null : _saveAndContinue,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: PrimaryButton(
-                  'اكتملت عملية التسجيل',
-                  icon: Icons.check_circle,
-                  color: AppTheme.success,
-                  onPressed: _savedMaterials.isEmpty ? null : _finishRegistration,
-                ),
-              ),
-            ]),
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final compact = constraints.maxWidth < 720;
+                if (compact) {
+                  return Column(
+                    children: [
+                      SizedBox(
+                        width: double.infinity,
+                        child: PrimaryButton(
+                          (store.isBusy || regStore.isBusy) ? 'جارٍ الحفظ...' : 'حفظ',
+                          icon: Icons.save,
+                          onPressed: (store.isBusy || regStore.isBusy) ? null : _saveAndContinue,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      SizedBox(
+                        width: double.infinity,
+                        child: PrimaryButton(
+                          'حفظ وإتمام عملية التسجيل',
+                          icon: Icons.task_alt,
+                          color: AppTheme.success,
+                          onPressed: (store.isBusy || regStore.isBusy) ? null : _saveAndFinish,
+                        ),
+                      ),
+                    ],
+                  );
+                }
+                return Row(children: [
+                  Expanded(
+                    child: PrimaryButton(
+                      (store.isBusy || regStore.isBusy) ? 'جارٍ الحفظ...' : 'حفظ',
+                      icon: Icons.save,
+                      onPressed: (store.isBusy || regStore.isBusy) ? null : _saveAndContinue,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: PrimaryButton(
+                      'حفظ وإتمام عملية التسجيل',
+                      icon: Icons.task_alt,
+                      color: AppTheme.success,
+                      onPressed: (store.isBusy || regStore.isBusy) ? null : _saveAndFinish,
+                    ),
+                  ),
+                ]);
+              },
+            ),
           ],
         );
       },
@@ -957,12 +1002,35 @@ class _NewStudentFormState extends State<_NewStudentForm> {
   }
 
   Future<void> _saveAndContinue() async {
+    await _saveCurrentMaterial(closeAfterSave: false);
+  }
+
+  Future<void> _saveAndFinish() async {
+    final hasCurrentMaterial = _subject != null && _teacher != null;
+    if (!hasCurrentMaterial) {
+      if (_savedMaterials.isNotEmpty) {
+        _finishRegistration();
+        return;
+      }
+      setState(() {
+        _msg = '⚠ أدخل مادة واحدة على الأقل قبل إتمام عملية التسجيل.';
+        _msgColor = AppTheme.danger;
+      });
+      return;
+    }
+
+    final ok = await _saveCurrentMaterial(closeAfterSave: true);
+    if (!mounted || !ok) return;
+    _finishRegistration();
+  }
+
+  Future<bool> _saveCurrentMaterial({required bool closeAfterSave}) async {
     if (_name.text.trim().isEmpty || _phone.text.trim().isEmpty || _subject == null || _teacher == null) {
       setState(() {
         _msg = '⚠ أكمل الاسم والهاتف والمادة والمدرس أولًا.';
         _msgColor = AppTheme.danger;
       });
-      return;
+      return false;
     }
 
     final currentAmount = _currentMaterialAmount();
@@ -973,7 +1041,7 @@ class _NewStudentFormState extends State<_NewStudentForm> {
             : '⚠ أدخل رسم الدورة لهذه المادة قبل الحفظ.';
         _msgColor = AppTheme.danger;
       });
-      return;
+      return false;
     }
 
     final subjectName = _subject!.trim();
@@ -989,13 +1057,13 @@ class _NewStudentFormState extends State<_NewStudentForm> {
         period: _period,
         system: _system,
       );
-      if (!mounted) return;
+      if (!mounted) return false;
       if (!result.ok || result.studentId == null) {
         setState(() {
           _msg = result.message;
           _msgColor = AppTheme.danger;
         });
-        return;
+        return false;
       }
       studentId = result.studentId;
       _createdStudentId = studentId;
@@ -1008,13 +1076,13 @@ class _NewStudentFormState extends State<_NewStudentForm> {
       teacherName: teacherName,
       period: _period,
     );
-    if (!mounted) return;
+    if (!mounted) return false;
     if (!requestResult.ok) {
       setState(() {
         _msg = requestResult.message;
         _msgColor = AppTheme.danger;
       });
-      return;
+      return false;
     }
 
     final amountResult = await store.addRequestedAmount(
@@ -1024,13 +1092,13 @@ class _NewStudentFormState extends State<_NewStudentForm> {
       system: _system,
       amount: currentAmount,
     );
-    if (!mounted) return;
+    if (!mounted) return false;
     if (!amountResult.ok) {
       setState(() {
         _msg = amountResult.message;
         _msgColor = AppTheme.danger;
       });
-      return;
+      return false;
     }
 
     final details = _system == 'نظام ساعات'
@@ -1048,10 +1116,13 @@ class _NewStudentFormState extends State<_NewStudentForm> {
       _courseFee.clear();
       _hoursCount.clear();
       _hourRate.clear();
-      _msg = '✅ تم حفظ البيانات والتسجيل بالمادة: $subjectName. يمكنك الآن متابعة مادة أخرى أو إنهاء التسجيل.';
+      _msg = closeAfterSave
+          ? '✅ تم حفظ المادة الأخيرة وسيتم الآن إتمام عملية التسجيل.'
+          : '✅ تم حفظ البيانات والتسجيل بالمادة: $subjectName. يمكنك الآن متابعة مادة أخرى أو إنهاء التسجيل.';
       _msgColor = AppTheme.success;
     });
     widget.onSaved();
+    return true;
   }
 
   void _finishRegistration() {
@@ -1064,7 +1135,6 @@ class _NewStudentFormState extends State<_NewStudentForm> {
       SnackBar(
         content: Text('✅ اكتملت عملية التسجيل للطالب $name. عدد المواد/الطلبات: $count — المطلوب الحالي: ${money(_accumulatedRequired)}'),
         behavior: SnackBarBehavior.floating,
-        width: 560,
       ),
     );
   }
