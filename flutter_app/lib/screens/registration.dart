@@ -22,7 +22,9 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
   @override
   void initState() {
     super.initState();
-    if (!store.isReady) {
+    if (store.isReady) {
+      store.refresh();
+    } else {
       store.init();
     }
   }
@@ -91,6 +93,22 @@ class _RequestsTab extends StatelessWidget {
   final void Function(String) onSnack;
   const _RequestsTab({required this.onSnack});
 
+  Future<void> _handleApprove(BuildContext context, RegistrationRequestItem request) async {
+    final store = RegistrationStore.instance;
+    final plan = store.approvalPlanForRequest(request);
+    if (plan.canDirectApprove) {
+      final result = await store.approveRequest(request.id);
+      onSnack(result.message);
+      return;
+    }
+
+    showSidePanel(
+      context,
+      title: 'توجيه اعتماد الطلب',
+      builder: (_) => _ApprovalRoutingPanel(request: request, plan: plan, onSnack: onSnack),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final store = RegistrationStore.instance;
@@ -118,6 +136,34 @@ class _RequestsTab extends StatelessWidget {
               onPressed: store.isBusy ? null : () => store.refresh(),
               icon: const Icon(Icons.refresh, size: 16),
               label: const Text('تحديث', style: TextStyle(fontSize: 12)),
+            ),
+            const SizedBox(width: 6),
+            TextButton.icon(
+              onPressed: store.isBusy
+                  ? null
+                  : () async {
+                      final ok = await showDialog<bool>(
+                            context: context,
+                            builder: (context) => AlertDialog(
+                              title: const Text('تهيئة قاعدة فارغة'),
+                              content: const Text('سيتم حذف كل البيانات المحلية نهائيًا: طلاب، دورات، طلبات، وانتظار. هل تريد المتابعة؟'),
+                              actions: [
+                                TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('إلغاء')),
+                                FilledButton(
+                                  onPressed: () => Navigator.pop(context, true),
+                                  style: FilledButton.styleFrom(backgroundColor: AppTheme.danger),
+                                  child: const Text('نعم، فرّغها'),
+                                ),
+                              ],
+                            ),
+                          ) ??
+                          false;
+                      if (!ok) return;
+                      final result = await store.resetAllLocalData();
+                      onSnack(result.message);
+                    },
+              icon: const Icon(Icons.cleaning_services_outlined, size: 16),
+              label: const Text('تهيئة فارغة', style: TextStyle(fontSize: 12)),
             ),
           ]),
         ),
@@ -153,12 +199,7 @@ class _RequestsTab extends StatelessWidget {
               if (r.status == 'معلق') ...[
                 IconButton(
                   tooltip: 'اعتماد',
-                  onPressed: store.isBusy
-                      ? null
-                      : () async {
-                          final result = await store.approveRequest(r.id);
-                          onSnack(result.message);
-                        },
+                  onPressed: store.isBusy ? null : () => _handleApprove(context, r),
                   icon: const Icon(Icons.check_circle, color: AppTheme.success),
                 ),
                 IconButton(
@@ -202,7 +243,7 @@ class _WaitingTab extends StatelessWidget {
             SizedBox(width: 10),
             Expanded(
               child: Text(
-                'عند اعتماد طلبٍ لمجموعة مكتملة، يُنقل الطالب تلقائيًا إلى قائمة انتظار المدرس نفسه ويُحفظ ذلك في القاعدة المحلية.',
+                'إذا كانت الدورة المطلوبة مكتملة أو مغلقة، تستطيع الإدارة الآن اختيار دورة بديلة مفتوحة أو وضع الطالب على قائمة انتظار المدرس نفسه، ويُحفظ القرار محليًا.',
                 style: TextStyle(fontSize: 12, color: AppTheme.gold, fontWeight: FontWeight.bold),
               ),
             ),
@@ -233,6 +274,156 @@ class _WaitingTab extends StatelessWidget {
           ],
         ),
       ]),
+    );
+  }
+}
+
+class _ApprovalRoutingPanel extends StatefulWidget {
+  final RegistrationRequestItem request;
+  final ApprovalRoutingPlan plan;
+  final void Function(String) onSnack;
+  const _ApprovalRoutingPanel({required this.request, required this.plan, required this.onSnack});
+
+  @override
+  State<_ApprovalRoutingPanel> createState() => _ApprovalRoutingPanelState();
+}
+
+class _ApprovalRoutingPanelState extends State<_ApprovalRoutingPanel> {
+  final store = RegistrationStore.instance;
+
+  Future<void> _approveAlternative(GroupOption group) async {
+    final note = group.teacher == widget.request.teacherName
+        ? 'تم اعتماد الطلب وتسجيل الطالب في دورة مفتوحة مع المدرس المطلوب.'
+        : 'تم اعتماد الطلب بتحويل الطالب إلى دورة بديلة مفتوحة: ${group.name}.';
+    final result = await store.approveRequestToGroup(widget.request.id, group.id, note: note);
+    if (!mounted) return;
+    if (result.ok) {
+      Navigator.pop(context);
+    }
+    widget.onSnack(result.message);
+  }
+
+  Future<void> _moveToWaiting() async {
+    final result = await store.moveRequestToWaiting(widget.request.id);
+    if (!mounted) return;
+    if (result.ok) {
+      Navigator.pop(context);
+    }
+    widget.onSnack(result.message);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final plan = widget.plan;
+    final preferred = plan.preferredGroup;
+    return ListView(
+      padding: const EdgeInsets.all(20),
+      children: [
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: AppTheme.gold.withOpacity(.08),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: AppTheme.gold.withOpacity(.28)),
+          ),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(widget.request.studentLabel,
+                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: AppTheme.dark)),
+            const SizedBox(height: 4),
+            Text('الطلب الأصلي: ${widget.request.subjectName} • ${widget.request.teacherName} • ${store.periodLabel(widget.request.period)}',
+                style: const TextStyle(fontSize: 12, color: AppTheme.textSub)),
+            const SizedBox(height: 8),
+            Text(plan.message,
+                style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.bold, color: AppTheme.gold)),
+          ]),
+        ),
+        if (preferred != null) ...[
+          const SizedBox(height: 14),
+          SectionCard(
+            'الدورة المطلوبة أصلًا',
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(preferred.name,
+                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: AppTheme.dark)),
+              const SizedBox(height: 6),
+              Wrap(spacing: 8, runSpacing: 8, children: [
+                StatusChip(preferred.system, color: preferred.isHoursSystem ? AppTheme.gold : AppTheme.seed),
+                StatusChip(
+                  preferred.status == 'closed'
+                      ? 'مغلقة'
+                      : (preferred.isFull ? 'مكتملة' : (preferred.status == 'running' ? 'منطلقة' : 'مفتوحة')),
+                  color: preferred.status == 'closed'
+                      ? AppTheme.danger
+                      : (preferred.isFull ? AppTheme.gold : AppTheme.success),
+                ),
+              ]),
+              const SizedBox(height: 8),
+              Text('المدرس: ${preferred.teacher}', style: const TextStyle(fontSize: 12, color: AppTheme.textSub)),
+              Text('الجدول: ${preferred.days}', style: const TextStyle(fontSize: 12, color: AppTheme.textSub)),
+              Text('المقاعد المتاحة: ${preferred.seatsLeft > 0 ? preferred.seatsLeft : 0}',
+                  style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: preferred.seatsLeft > 0 ? AppTheme.success : AppTheme.danger)),
+            ]),
+          ),
+        ],
+        const SizedBox(height: 14),
+        SectionCard(
+          'الدورات المفتوحة البديلة',
+          child: plan.alternatives.isEmpty
+              ? const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 10),
+                  child: Text('لا توجد حاليًا دورات مفتوحة بديلة لنفس المادة والفترة.',
+                      style: TextStyle(fontSize: 12.5, color: AppTheme.textSub)),
+                )
+              : Column(
+                  children: [
+                    for (final alt in plan.alternatives)
+                      Container(
+                        margin: const EdgeInsets.only(bottom: 10),
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: AppTheme.success.withOpacity(.06),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: AppTheme.success.withOpacity(.2)),
+                        ),
+                        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                          Row(children: [
+                            Expanded(
+                              child: Text(alt.name,
+                                  style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.bold, color: AppTheme.dark)),
+                            ),
+                            PeriodBadge(alt.period),
+                          ]),
+                          const SizedBox(height: 6),
+                          Text('${alt.subject} • ${alt.teacher}', style: const TextStyle(fontSize: 11.5, color: AppTheme.textSub)),
+                          Text('متاح ${alt.seatsLeft} مقعد',
+                              style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold, color: AppTheme.success)),
+                          const SizedBox(height: 8),
+                          PrimaryButton(
+                            'اعتماد في هذه الدورة',
+                            icon: Icons.open_in_new,
+                            color: AppTheme.success,
+                            onPressed: store.isBusy ? null : () => _approveAlternative(alt),
+                          ),
+                        ]),
+                      ),
+                  ],
+                ),
+        ),
+        const SizedBox(height: 14),
+        PrimaryButton(
+          'وضع الطالب على قائمة انتظار المدرس المطلوب',
+          icon: Icons.hourglass_top,
+          color: AppTheme.gold,
+          onPressed: store.isBusy ? null : _moveToWaiting,
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'هذا الخيار يحافظ على رغبة الطالب الأصلية: نفس المادة ونفس المدرس المفضل، حتى لو كانت الدورة مغلقة أو مكتملة الآن.',
+          style: const TextStyle(fontSize: 11.5, color: AppTheme.textSub),
+        ),
+      ],
     );
   }
 }
@@ -446,9 +637,11 @@ class _PreviewCard extends StatelessWidget {
         Expanded(
           child: Text(
             !hasGroup
-                ? 'لا توجد مجموعة مطابقة تمامًا حاليًا لهذا المدرس/الفترة. سيُحفظ الطلب ويظهر للإدارة للمراجعة أو توجيهه لاحقًا.'
+                ? (preview.alternatives.isNotEmpty
+                    ? 'لا توجد مجموعة مطابقة تمامًا حاليًا لهذا المدرس/الفترة، لكن توجد بدائل مفتوحة وستظهر للإدارة عند الاعتماد مع خيار وضع الطالب على الانتظار.'
+                    : 'لا توجد مجموعة مطابقة تمامًا حاليًا لهذا المدرس/الفترة. سيُحفظ الطلب ويظهر للإدارة للمراجعة أو توجيهه لاحقًا.')
                 : (full
-                    ? 'المجموعة المطلوبة مكتملة. عند الاعتماد سيُنقل الطالب تلقائيًا إلى قائمة الانتظار.'
+                    ? 'المجموعة المطلوبة مكتملة. عند الاعتماد ستظهر بدائل مفتوحة إن وُجدت، أو يمكن وضع الطالب على قائمة الانتظار.'
                     : 'توجد مجموعة متاحة ويمكن عند الاعتماد تسجيل الطالب مباشرة.'),
             style: TextStyle(
               fontSize: 12.5,

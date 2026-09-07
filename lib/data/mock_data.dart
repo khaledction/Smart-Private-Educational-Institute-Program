@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 
-/// البيانات التجريبية v3.2 — تدعم النظامين (كورسات كاملة / نظام ساعات)
+/// البيانات التجريبية v3.6 — تدعم النظامين (كورسات كاملة / نظام ساعات)
 /// وثلاث فترات: صباحي / ظهر / مسائي
+/// مع سياسات مالية معتمدة: الاستحقاق بالجلسة المنفذة + دفتر ثلاثي + فصل المعتمد عن المصروف + قفل مالي
 
 // ============================ النظامان ============================
 const kSystems = ['كورس كامل', 'نظام ساعات'];
@@ -101,7 +102,7 @@ class Teacher {
       {this.degree = 'جامعة اربع سنوات', this.mobile = '', this.whatsapp = '',
        this.nationalId = '', this.worksGov = false, this.worksOther = false,
        this.mgmtRating = 4.5});
-  double get occupancy => capacity == 0 ? 0 : enrolled / capacity;
+  double get occupancy => capacity == 0 ? 0.0 : enrolled / capacity;
   double get balance => earned - paidOut;
 }
 
@@ -119,26 +120,70 @@ class Group {
   final String name, subject, teacher, room, days, status, period, system;
   final int enrolled, capacity, waiting, price, sessionsDone, sessionsTotal, installments;
   final String type;
+  final double teacherPct; // نسبة المعلم — يحددها المدير العام عند الاعتماد
+  final bool financeLocked; // قفل مالي بعد إغلاق الدورة
   Group(this.name, this.subject, this.teacher, this.period, this.enrolled,
       this.capacity, this.waiting, this.status, this.room, this.days,
       this.price, this.sessionsDone, this.sessionsTotal, this.system, this.installments,
-      {this.type = ''});
+      {this.type = '', this.teacherPct = 0, this.financeLocked = false});
   int get seatsLeft => capacity - enrolled;
-  double get fill => capacity == 0 ? 0 : enrolled / capacity;
+  double get fill => capacity == 0 ? 0.0 : enrolled / capacity;
   bool get isHoursSystem => system == 'نظام ساعات';
+  int get executedSessions => sessionsDone < 0 ? 0 : (sessionsDone > sessionsTotal ? sessionsTotal : sessionsDone);
+  double get sessionUnitPrice => isHoursSystem ? price.toDouble() : (sessionsTotal == 0 ? 0.0 : price / sessionsTotal);
+  // ===== الإيراد التعاقدي الكامل =====
+  double get revenue => isHoursSystem ? (price * sessionsTotal * enrolled).toDouble() : (price * enrolled).toDouble();
+  // ===== الاعتراف المالي يكون على الجلسات المنفذة فقط =====
+  double get accruedRevenue => sessionUnitPrice * executedSessions * enrolled;
+  double get deferredRevenue => revenue > accruedRevenue ? revenue - accruedRevenue : 0.0;
+  // ===== استحقاق المدرس: إجمالي تعاقدي مقابل مستحق منفذ =====
+  double get teacherComp => teacherPct <= 0 ? 0.0 : revenue * teacherPct / 100;
+  double get accruedTeacherComp => teacherPct <= 0 ? 0.0 : accruedRevenue * teacherPct / 100;
+  double get remainingTeacherComp => teacherComp > accruedTeacherComp ? teacherComp - accruedTeacherComp : 0.0;
+  double get instituteNet => revenue - teacherComp;
+  double get instituteNetAccrued => accruedRevenue - accruedTeacherComp;
+  double get instituteMarginPct => accruedRevenue == 0 ? 0.0 : instituteNetAccrued / accruedRevenue * 100;
 }
 
 final kGroups = <Group>[
-  Group('إنجليزي B2 — مسائي أ', 'اللغة الإنجليزية', 'أ. سامر الحلبي', 'مسائي', 12, 14, 4, 'running', 'قاعة 2', 'سبت + أربعاء • 5:00م', 180000, 8, 24, 'كورس كامل', 3, type: 'لغات'),
+  Group('إنجليزي B2 — مسائي أ', 'اللغة الإنجليزية', 'أ. سامر الحلبي', 'مسائي', 12, 14, 4, 'running', 'قاعة 2', 'سبت + أربعاء • 5:00م', 180000, 8, 24, 'كورس كامل', 3, type: 'لغات', teacherPct: 30),
   Group('إنجليزي A2 — صباحي ب', 'اللغة الإنجليزية', 'أ. رنا خالد', 'صباحي', 10, 12, 0, 'running', 'قاعة 1', 'أحد + ثلاثاء • 10:00ص', 150000, 6, 24, 'كورس كامل', 2),
-  Group('رياضيات تاسع — مسائي', 'الرياضيات', 'أ. محمد العلي', 'مسائي', 14, 14, 5, 'running', 'قاعة 3', 'أحد + ثلاثاء • 4:00م', 160000, 10, 20, 'كورس كامل', 2, type: 'منهجية مدرسية'),
-  Group('فيزياء بكلوريا — ظهر', 'الفيزياء', 'أ. ليلى نصار', 'ظهر', 8, 12, 1, 'running', 'مختبر 1', 'ثلاثاء • 1:00 ظهرًا', 200000, 5, 16, 'كورس كامل', 2, type: 'تخصصية'),
+  Group('رياضيات تاسع — مسائي', 'الرياضيات', 'أ. محمد العلي', 'مسائي', 14, 14, 5, 'running', 'قاعة 3', 'أحد + ثلاثاء • 4:00م', 160000, 10, 20, 'كورس كامل', 2, type: 'منهجية مدرسية', teacherPct: 30),
+  Group('فيزياء بكلوريا — ظهر', 'الفيزياء', 'أ. ليلى نصار', 'ظهر', 8, 12, 1, 'running', 'مختبر 1', 'ثلاثاء • 1:00 ظهرًا', 200000, 5, 16, 'كورس كامل', 2, type: 'تخصصية', teacherPct: 40),
   Group('ألماني A1 — مسائي', 'الألمانية', 'أ. كريم يوسف', 'مسائي', 6, 10, 0, 'open', 'قاعة 2', 'خميس • 5:00م', 170000, 0, 20, 'كورس كامل', 3),
   Group('محاسبة — دبلوم مسائي', 'المحاسبة', 'أ. هدى الزين', 'مسائي', 11, 15, 2, 'open', 'قاعة 4', 'سبت + اثنين • 6:30م', 220000, 2, 24, 'كورس كامل', 4),
   Group('تأسيس قراءة — صباحي', 'التأسيس', 'أ. رنا خالد', 'صباحي', 9, 10, 0, 'running', 'قاعة 1', 'سبت + ثلاثاء • 10:00ص', 120000, 7, 18, 'كورس كامل', 2),
-  Group('محادثة إنجليزي — ساعات', 'المحادثة', 'أ. سامر الحلبي', 'ظهر', 10, 12, 1, 'running', 'قاعة 2', 'حسب حجز الطالب • 1:30 ظهرًا', 15000, 4, 12, 'نظام ساعات', 0, type: 'لغات'),
+  Group('محادثة إنجليزي — ساعات', 'المحادثة', 'أ. سامر الحلبي', 'ظهر', 10, 12, 1, 'running', 'قاعة 2', 'حسب حجز الطالب • 1:30 ظهرًا', 15000, 4, 12, 'نظام ساعات', 0, type: 'لغات', teacherPct: 25),
   Group('رياضيات — جلسات مساعدة', 'الرياضيات', 'أ. محمد العلي', 'مسائي', 5, 8, 0, 'open', 'قاعة 3', 'حسب حجز الطالب • 6:00م', 20000, 0, 10, 'نظام ساعات', 0),
 ];
+
+Teacher? teacherByName(String name) {
+  for (final t in kTeachers) {
+    if (t.name == name) return t;
+  }
+  return null;
+}
+
+bool marginNeedsWarning(double teacherPct) => (100 - teacherPct) > 70;
+
+double approvedCompForCourse(String course) =>
+    kCompNotices.where((n) => n.course == course).fold<double>(0.0, (s, n) => s + n.amount);
+
+double paidCompForCourse(String course) =>
+    kCompNotices.where((n) => n.course == course).fold<double>(0.0, (s, n) => s + n.paidAmount);
+
+double pendingCompForCourse(String course) =>
+    approvedCompForCourse(course) - paidCompForCourse(course);
+
+double approvedCompForTeacher(String teacher) =>
+    kCompNotices.where((n) => n.teacher == teacher).fold<double>(0.0, (s, n) => s + n.amount);
+
+double paidCompForTeacher(String teacher) =>
+    kCompNotices.where((n) => n.teacher == teacher).fold<double>(0.0, (s, n) => s + n.paidAmount);
+
+double pendingCompForTeacher(String teacher) =>
+    approvedCompForTeacher(teacher) - paidCompForTeacher(teacher);
+
 
 // ==================== طلبات التسجيل وقوائم الانتظار ====================
 class RegRequest {
@@ -361,3 +406,39 @@ final kSubjectDistribution = <(String, double, Color)>[
   ('فيزياء', 8, Color(0xFFDB2777)),
   ('ألماني', 6, Color(0xFF475569)),
 ];
+
+
+// ==================== إشعارات تعويض المدرسين (المدير العام → المحاسبة) ====================
+class CompNotice {
+  final String date, teacher, degree, course, system;
+  final int hours, students;
+  final double pct, amount;
+  String status; // معتمد / مصروف
+  CompNotice(this.date, this.teacher, this.degree, this.course, this.system,
+      this.hours, this.students, this.pct, this.amount, this.status);
+  double get paidAmount => status == 'مصروف' ? amount : 0.0;
+  double get pendingAmount => amount - paidAmount;
+}
+
+final kCompNotices = <CompNotice>[
+  CompNotice('2026-09-03', 'أ. سامر الحلبي', 'ماجستير تأهيل وتخصص', 'إنجليزي B2 — مسائي أ', 'كورس كامل', 8, 12, 30, 216000, 'معتمد'),
+  CompNotice('2026-09-02', 'أ. محمد العلي', 'جامعة خمس سنوات', 'رياضيات تاسع — مسائي', 'كورس كامل', 10, 14, 30, 336000, 'معتمد'),
+  CompNotice('2026-09-01', 'أ. ليلى نصار', 'دكتوراه', 'فيزياء بكلوريا — ظهر', 'كورس كامل', 5, 8, 40, 200000, 'مصروف'),
+  CompNotice('2026-08-30', 'أ. سامر الحلبي', 'ماجستير تأهيل وتخصص', 'محادثة إنجليزي — ساعات', 'نظام ساعات', 4, 10, 25, 150000, 'معتمد'),
+];
+
+class AuditEntry {
+  final String time, user, action, target, details;
+  AuditEntry(this.time, this.user, this.action, this.target, this.details);
+}
+
+final kAuditLog = <AuditEntry>[
+  AuditEntry('2026-09-05 09:10', 'المدير العام', 'اعتماد مالي', 'إنجليزي B2 — مسائي أ', 'اعتماد نسبة 30% وفق سياسة السقف الأعلى 50% وربط المستحق بالجلسات المنفذة فقط.'),
+  AuditEntry('2026-09-05 09:20', 'المحاسب', 'فصل قيود', 'فيزياء بكلوريا — ظهر', 'تم فصل المستحق عن المصروف: 200,000 ل.س صُرفت فعليًا وتم إغلاق قيدها.'),
+  AuditEntry('2026-09-05 09:35', 'المدير العام', 'مراجعة هامش', 'محادثة إنجليزي — ساعات', 'الهامش الحالي 75% — ظهر تنبيه قبل الاعتماد وتمت الموافقة بعد المراجعة.'),
+  AuditEntry('2026-09-05 09:50', 'مدير الدورات', 'دفتر ثلاثي', 'رياضيات تاسع — مسائي', 'تم اعتماد دفتر الدورة الثلاثي: تعاقدي / محقق / مصروف.'),
+];
+
+void addAudit(String action, String target, String details, {String user = 'المدير العام'}) {
+  kAuditLog.insert(0, AuditEntry('2026-09-05 11:30', user, action, target, details));
+}

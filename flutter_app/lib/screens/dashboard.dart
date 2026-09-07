@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+
 import '../data/mock_data.dart';
 import '../data/registration_store.dart';
+import '../data/student_store.dart';
 import '../theme.dart';
 import '../widgets/ui.dart';
 
@@ -11,13 +13,19 @@ class DashboardScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final store = RegistrationStore.instance;
+    final regStore = RegistrationStore.instance;
+    final studentStore = StudentStore.instance;
+
     return AnimatedBuilder(
-      animation: store,
+      animation: Listenable.merge([regStore, studentStore]),
       builder: (context, _) {
-        final activeStudents = kStudents.where((s) => s.status == 'نشط').length;
-        final pendingReq = store.isReady ? store.pendingCount : kRequests.where((r) => r.status == 'معلق').length;
-        final waitingTotal = store.isReady ? store.waitingCount : kWaiting.length;
+        final activeStudents = studentStore.isReady
+            ? studentStore.activeCount
+            : kStudents.where((s) => s.status == 'نشط').length;
+        final pendingReq = regStore.isReady
+            ? regStore.pendingCount
+            : kRequests.where((r) => r.status == 'معلق').length;
+        final waitingTotal = regStore.isReady ? regStore.waitingCount : kWaiting.length;
         const revenueMonth = 2700000.0;
         const overdue = 85000.0;
 
@@ -73,12 +81,12 @@ class DashboardScreen extends StatelessWidget {
             Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Expanded(
                 flex: 2,
-                child: SectionCard('تنبيهات ذكية',
-                    actionLabel: 'عرض الكل',
-                    onAction: () => onNavigate?.call(2),
-                    child: Column(children: [
-                      for (final n in kNotifications.take(4)) _AlertTile(n),
-                    ])),
+                child: SectionCard(
+                  'تنبيهات ذكية',
+                  actionLabel: 'عرض الكل',
+                  onAction: () => onNavigate?.call(2),
+                  child: Column(children: [for (final n in kNotifications.take(4)) _AlertTile(n)]),
+                ),
               ),
               const SizedBox(width: 16),
               Expanded(

@@ -1,7 +1,7 @@
 name: maehdi_app
 description: "معهدّي — نظام إدارة المعاهد التعليمية الذكي (Desktop-First, Flutter)"
 publish_to: 'none'
-version: 3.7.0
+version: 3.8.0
 
 environment:
   sdk: '>=3.3.0 <4.0.0'

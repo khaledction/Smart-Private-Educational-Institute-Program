@@ -94,6 +94,7 @@ class GroupOption {
   int get seatsLeft => capacity - enrolled;
   bool get isFull => seatsLeft <= 0;
   bool get isOpenForRegistration => status == 'open' || status == 'running';
+  bool get isCompleted => status == 'completed' || status == 'closed' || (sessionsTotal > 0 && executedSessions >= sessionsTotal);
   bool get isHoursSystem => system == 'نظام ساعات';
   int get executedSessions => sessionsDone < 0 ? 0 : (sessionsDone > sessionsTotal ? sessionsTotal : sessionsDone);
   double get sessionUnitPrice => isHoursSystem ? price : (sessionsTotal == 0 ? 0.0 : price / sessionsTotal);
@@ -630,6 +631,28 @@ class RegistrationStore extends ChangeNotifier {
     );
   }
 
+  Future<ActionResult> submitRequestByLabels({
+    required int studentId,
+    required String subjectName,
+    required String teacherName,
+    required String period,
+  }) async {
+    try {
+      final db = await _db.database;
+      final subjectId = await _ensureSubject(db, subjectName.trim());
+      final teacherId = await _ensureTeacher(db, name: teacherName.trim(), subject: subjectName.trim());
+      await refresh();
+      return await submitRequest(
+        studentId: studentId,
+        subjectId: subjectId,
+        teacherId: teacherId,
+        period: period,
+      );
+    } catch (e) {
+      return ActionResult(false, 'تعذر تجهيز طلب المادة: $e');
+    }
+  }
+
   Future<ActionResult> submitRequest({
     required int studentId,
     required int subjectId,
@@ -796,15 +819,27 @@ class RegistrationStore extends ChangeNotifier {
         );
       }
 
+      final studentRows = await db.query(
+        'students',
+        columns: ['level', 'preferred_system'],
+        where: 'id = ?',
+        whereArgs: [studentId],
+        limit: 1,
+      );
+      final currentLevel = studentRows.isEmpty ? '' : (studentRows.first['level'] as String? ?? '').trim();
+      final currentSystem = studentRows.isEmpty ? '' : (studentRows.first['preferred_system'] as String? ?? '').trim();
+
       await db.update(
         'students',
         {
           'status': 'نشط',
           'preferred_period': group.period,
-          'preferred_system': group.system,
-          'level': group.subject,
-          'total_fee': group.price,
-          'balance_due': group.price,
+          'preferred_system': currentSystem.isEmpty
+              ? group.system
+              : (currentSystem == group.system ? currentSystem : 'متعدد'),
+          'level': currentLevel.isEmpty || currentLevel == '—'
+              ? group.subject
+              : (currentLevel == group.subject ? currentLevel : 'عدة مواد'),
         },
         where: 'id = ?',
         whereArgs: [studentId],

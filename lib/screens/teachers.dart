@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import '../data/mock_data.dart';
+import '../data/registration_store.dart';
 import '../theme.dart';
 import '../widgets/ui.dart';
 
-/// المدرسون v3.3 — الإشغال + الاستحقاقات + إضافة مدرس جديد بلوحة منزلقة كاملة
+/// المدرسون v3.6 — الإشغال + التقييم + فصل المستحق عن المصروف للمدرسين
 class TeachersScreen extends StatefulWidget {
   const TeachersScreen({super.key});
 
@@ -12,6 +13,54 @@ class TeachersScreen extends StatefulWidget {
 }
 
 class _TeachersScreenState extends State<TeachersScreen> {
+  final _regStore = RegistrationStore.instance;
+  bool _resettingDb = false;
+  String _dbMessage = '';
+  Color _dbMessageColor = AppTheme.textSub;
+
+  Future<void> _resetDatabase() async {
+    final ok = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('تهيئة قاعدة فارغة'),
+            content: const Text(
+              'سيتم حذف كل البيانات المحلية نهائيًا من قاعدة التسجيل: الطلاب، المواد، المدرسون، الدورات، الطلبات، والانتظار. هذا الزر مؤقت للتجربة. هل تريد المتابعة؟',
+            ),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('إلغاء')),
+              FilledButton(
+                onPressed: () => Navigator.pop(context, true),
+                style: FilledButton.styleFrom(backgroundColor: AppTheme.danger),
+                child: const Text('نعم، هيّئ قاعدة فارغة'),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+    if (!ok) return;
+
+    setState(() {
+      _resettingDb = true;
+      _dbMessage = '';
+    });
+
+    final result = await _regStore.resetAllLocalData();
+    if (!mounted) return;
+
+    setState(() {
+      _resettingDb = false;
+      _dbMessage = result.message;
+      _dbMessageColor = result.ok ? AppTheme.success : AppTheme.danger;
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(result.message),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return SingleChildScrollView(
@@ -23,10 +72,43 @@ class _TeachersScreenState extends State<TeachersScreen> {
               '${kTeachers.fold<int>(0, (s, t) => s + t.enrolled)}', color: AppTheme.success)),
           Expanded(child: StatCard(Icons.hourglass_top, 'في انتظار مقعد',
               '${kTeachers.fold<int>(0, (s, t) => s + t.waiting)}', color: AppTheme.gold)),
-          Expanded(child: StatCard(Icons.account_balance, 'صافي مستحقاتهم',
-              money(kTeachers.fold<double>(0, (s, t) => s + t.balance)),
+          Expanded(child: StatCard(
+              Icons.account_balance,
+              'قيد الصرف للمدرسين',
+              money(kTeachers.fold<double>(0.0, (s, t) => s + pendingCompForTeacher(t.name))),
               color: AppTheme.purple)),
         ]),
+        const SizedBox(height: 14),
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: AppTheme.danger.withOpacity(.05),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: AppTheme.danger.withOpacity(.18)),
+          ),
+          child: Row(children: [
+            const Icon(Icons.storage_outlined, color: AppTheme.danger),
+            const SizedBox(width: 10),
+            const Expanded(
+              child: Text(
+                'زر مؤقت: تهيئة قاعدة فارغة. يفيدك عند بدء تجربة جديدة من الصفر داخل قاعدة البيانات المحلية.',
+                style: TextStyle(fontSize: 12.5, color: AppTheme.danger, fontWeight: FontWeight.bold),
+              ),
+            ),
+            TextButton.icon(
+              onPressed: _resettingDb ? null : _resetDatabase,
+              icon: const Icon(Icons.cleaning_services_outlined, size: 16),
+              label: Text(_resettingDb ? 'جارٍ التهيئة...' : 'تهيئة قاعدة فارغة', style: const TextStyle(fontSize: 12)),
+            ),
+          ]),
+        ),
+        if (_dbMessage.isNotEmpty) ...[
+          const SizedBox(height: 10),
+          Text(
+            _dbMessage,
+            style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.bold, color: _dbMessageColor),
+          ),
+        ],
         const SizedBox(height: 14),
         Row(children: [
           Text('كادر المدرسين (${kTeachers.length})',
@@ -41,7 +123,7 @@ class _TeachersScreenState extends State<TeachersScreen> {
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
           gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-              maxCrossAxisExtent: 420, mainAxisExtent: 252, crossAxisSpacing: 14, mainAxisSpacing: 14),
+              maxCrossAxisExtent: 420, mainAxisExtent: 276, crossAxisSpacing: 14, mainAxisSpacing: 14),
           itemCount: kTeachers.length,
           itemBuilder: (_, i) => _TeacherCard(kTeachers[i]),
         ),
@@ -108,21 +190,52 @@ class _TeacherCard extends StatelessWidget {
                 style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold, color: AppTheme.dark2)),
           ]),
         ),
+        // التعويضات المعتمدة له (من إشعارات المدير العام)
+        Builder(builder: (_) {
+          final approved = approvedCompForTeacher(t.name);
+          final paid = paidCompForTeacher(t.name);
+          final pending = pendingCompForTeacher(t.name);
+          if (approved <= 0 && paid <= 0) return const SizedBox.shrink();
+          return Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
+              decoration: BoxDecoration(color: AppTheme.gold.withOpacity(.07), borderRadius: BorderRadius.circular(8)),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Row(children: [
+                  const Icon(Icons.payments, size: 13, color: AppTheme.gold),
+                  const SizedBox(width: 5),
+                  Expanded(child: Text('المعتمد للمحاسبة: ' + money(approved),
+                      style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold, color: AppTheme.gold))),
+                ]),
+                const SizedBox(height: 4),
+                Row(children: [
+                  Expanded(child: Text('مصروف فعليًا: ' + money(paid),
+                      style: const TextStyle(fontSize: 10.2, fontWeight: FontWeight.bold, color: AppTheme.purple))),
+                  const SizedBox(width: 8),
+                  Expanded(child: Text('قيد الصرف: ' + money(pending),
+                      textAlign: TextAlign.end,
+                      style: const TextStyle(fontSize: 10.2, fontWeight: FontWeight.bold, color: AppTheme.danger))),
+                ]),
+              ]),
+            ),
+          );
+        }),
         const Divider(height: 14),
         Row(children: [
           Expanded(child: FittedBox(fit: BoxFit.scaleDown, alignment: AlignmentDirectional.centerStart,
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              const Text('استحقاق الشهر', style: TextStyle(fontSize: 10, color: AppTheme.textSub)),
-              Text(money(t.earned),
+              const Text('المستحق المنفذ', style: TextStyle(fontSize: 10, color: AppTheme.textSub)),
+              Text(money(approvedCompForTeacher(t.name)),
                   style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppTheme.dark)),
             ]))),
           const SizedBox(width: 8),
           Expanded(child: FittedBox(fit: BoxFit.scaleDown, alignment: AlignmentDirectional.centerEnd,
             child: Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-              const Text('صافي المستحق', style: TextStyle(fontSize: 10, color: AppTheme.textSub)),
-              Text(money(t.balance),
+              const Text('المصروف / المتبقي', style: TextStyle(fontSize: 10, color: AppTheme.textSub)),
+              Text(money(paidCompForTeacher(t.name)) + ' / ' + money(pendingCompForTeacher(t.name)),
                   style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold,
-                      color: t.balance > 0 ? AppTheme.gold : AppTheme.success)),
+                      color: pendingCompForTeacher(t.name) > 0 ? AppTheme.gold : AppTheme.success)),
             ]))),
         ]),
       ]),

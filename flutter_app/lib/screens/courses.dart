@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
+
+import '../data/app_session.dart';
 import '../data/mock_data.dart';
+import '../data/registration_store.dart';
 import '../theme.dart';
 import '../widgets/ui.dart';
 
-/// الدورات والمجموعات v3.6 — اعتماد مالي كامل + دفتر ثلاثي + قفل مالي + تحذير هامش
+/// شاشة الدورات — مربوطة الآن فعليًا بقاعدة البيانات المحلية.
+/// الوضع الحالي الافتراضي: المدير العام بصلاحيات كاملة.
 class CoursesScreen extends StatefulWidget {
   const CoursesScreen({super.key});
 
@@ -12,79 +16,272 @@ class CoursesScreen extends StatefulWidget {
 }
 
 class _CoursesScreenState extends State<CoursesScreen> {
+  final store = RegistrationStore.instance;
+  final _search = TextEditingController();
+
   String _system = 'الكل';
   String _period = 'الكل';
   String _type = 'الكل';
 
   @override
+  void initState() {
+    super.initState();
+    if (store.isReady) {
+      store.refresh();
+    } else {
+      store.init();
+    }
+  }
+
+  @override
+  void dispose() {
+    _search.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final groups = kGroups.where((g) {
-      final sysOk = _system == 'الكل' || g.system == _system;
-      final perOk = _period == 'الكل' || g.period == _period;
-      final typOk = _type == 'الكل' || g.type == _type;
-      return sysOk && perOk && typOk;
-    }).toList();
+    return AnimatedBuilder(
+      animation: store,
+      builder: (context, _) {
+        if (!store.isReady && store.isBusy) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (store.error != null && !store.isReady) {
+          return Center(
+            child: Container(
+              width: 620,
+              padding: const EdgeInsets.all(20),
+              decoration: cardDeco(),
+              child: Column(mainAxisSize: MainAxisSize.min, children: [
+                const Icon(Icons.storage, size: 34, color: AppTheme.danger),
+                const SizedBox(height: 10),
+                const Text('تعذر تهيئة قاعدة بيانات الدورات',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppTheme.dark)),
+                const SizedBox(height: 8),
+                Text(store.error!, style: const TextStyle(fontSize: 12.5, color: AppTheme.textSub)),
+                const SizedBox(height: 14),
+                PrimaryButton('إعادة المحاولة', icon: Icons.refresh, onPressed: () => store.init()),
+              ]),
+            ),
+          );
+        }
 
-    final pending = kGroups.where((g) => g.status == 'pending').toList();
-    final fullCourses = kGroups.where((g) => !g.isHoursSystem).length;
-    final hoursSystem = kGroups.where((g) => g.isHoursSystem).length;
+        final search = _search.text.trim();
+        final typeOptions = <String>{
+          'الكل',
+          ...kCourseTypes,
+          ...store.groups.map((g) => g.type).where((v) => v.trim().isNotEmpty),
+        }.toList();
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: [
-          Expanded(child: StatCard(Icons.auto_stories, 'كورسات كاملة (أقساط)', '$fullCourses',
-              trend: 'دفع بأقساط تحددها الإدارة')),
-          Expanded(child: StatCard(Icons.bolt, 'نظام ساعات (دفع فوري)', '$hoursSystem',
-              trend: 'الدفع قبل كل جلسة', color: AppTheme.gold)),
-          Expanded(child: StatCard(Icons.groups, 'إجمالي المسجلين',
-              '${kGroups.fold<int>(0, (s, g) => s + g.enrolled)}', color: AppTheme.success)),
-          Expanded(child: StatCard(Icons.schedule_send, 'في قوائم الانتظار',
-              '${kGroups.fold<int>(0, (s, g) => s + g.waiting)}', color: AppTheme.danger)),
-        ]),
-        const SizedBox(height: 16),
-        // ===== لافتة الدورات بانتظار موافقة المدير العام =====
-        if (pending.isNotEmpty) ...[
-          _PendingBanner(
-            count: pending.length,
-            onOpen: () => showSidePanel(context, title: 'موافقة المدير العام على الدورات الجديدة',
-                builder: (_) => _ApprovalPanel(onChanged: () => setState(() {}))),
-          ),
-          const SizedBox(height: 12),
-        ],
-        // ===== الفلاتر: النظام × الفترة × النوع =====
-        Wrap(crossAxisAlignment: WrapCrossAlignment.center, spacing: 14, runSpacing: 8, children: [
-          _filterGroup('النظام:', ['الكل', ...kSystems], _system, AppTheme.purple,
-              (v) => setState(() => _system = v)),
-          _filterGroup('الفترة:', ['الكل', ...kPeriods], _period, AppTheme.seed,
-              (v) => setState(() => _period = v)),
-          _filterGroup('النوع:', ['الكل', ...kCourseTypes], _type, AppTheme.success,
-              (v) => setState(() => _type = v)),
-        ]),
-        const Divider(height: 26),
-        Row(children: [
-          Text('${groups.length} مجموعة',
-              style: const TextStyle(fontSize: 12.5, color: AppTheme.textSub)),
-          const Spacer(),
-          PrimaryButton('إنشاء دورة جديدة', icon: Icons.add_circle,
-              onPressed: () => showSidePanel(context, title: 'إنشاء دورة جديدة',
-                  builder: (_) => _CourseForm(onSaved: () => setState(() {})))),
-        ]),
-        const SizedBox(height: 14),
-        GridView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-              maxCrossAxisExtent: 430, mainAxisExtent: 276, crossAxisSpacing: 14, mainAxisSpacing: 14),
-          itemCount: groups.length,
-          itemBuilder: (_, i) => _GroupCard(groups[i], onSaved: () => setState(() {})),
-        ),
-      ]),
+        final groups = store.groups.where((g) {
+          final sysOk = _system == 'الكل' || g.system == _system;
+          final perOk = _period == 'الكل' || g.period == _period;
+          final typeOk = _type == 'الكل' || g.type == _type;
+          final text = '${g.name} ${g.subject} ${g.teacher} ${g.room}';
+          final searchOk = search.isEmpty || text.contains(search);
+          return sysOk && perOk && typeOk && searchOk;
+        }).toList();
+
+        final fullCourses = store.groups.where((g) => !g.isHoursSystem).length;
+        final hoursSystem = store.groups.where((g) => g.isHoursSystem).length;
+        final totalEnrolled = store.groups.fold<int>(0, (s, g) => s + g.enrolled);
+        final totalWaiting = store.groups.fold<int>(0, (s, g) => s + g.waiting);
+
+        return SingleChildScrollView(
+          padding: const EdgeInsets.all(24),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: AppSession.isGeneralManager
+                    ? AppTheme.purple.withOpacity(.07)
+                    : AppTheme.seed.withOpacity(.07),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: AppSession.isGeneralManager
+                      ? AppTheme.purple.withOpacity(.28)
+                      : AppTheme.seed.withOpacity(.28),
+                ),
+              ),
+              child: Row(children: [
+                Icon(
+                  AppSession.isGeneralManager ? Icons.admin_panel_settings : Icons.badge,
+                  color: AppSession.isGeneralManager ? AppTheme.purple : AppTheme.seed,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text('وضع التشغيل الحالي: ${AppSession.currentRole}',
+                        style: TextStyle(
+                            fontSize: 13.5,
+                            fontWeight: FontWeight.bold,
+                            color: AppSession.isGeneralManager ? AppTheme.purple : AppTheme.seed)),
+                    const SizedBox(height: 4),
+                    Text(
+                      AppSession.canViewFinancial
+                          ? 'أنت الآن بصلاحيات كاملة، لذلك ستظهر لك التفاصيل المالية داخل ملف الدورة وملف الطالب.'
+                          : 'التفاصيل المالية مخفية لهذا الدور، وتظهر فقط للمحاسبة أو المدير العام.',
+                      style: const TextStyle(fontSize: 12, color: AppTheme.textSub),
+                    ),
+                  ]),
+                ),
+                TextButton.icon(
+                  onPressed: store.isBusy ? null : () => store.refresh(),
+                  icon: const Icon(Icons.refresh, size: 16),
+                  label: const Text('تحديث'),
+                ),
+                const SizedBox(width: 8),
+                PrimaryButton(
+                  'تهيئة قاعدة فارغة',
+                  icon: Icons.cleaning_services_outlined,
+                  color: AppTheme.danger,
+                  onPressed: store.isBusy ? null : _resetDatabase,
+                ),
+              ]),
+            ),
+            const SizedBox(height: 16),
+            Row(children: [
+              Expanded(child: StatCard(Icons.auto_stories, 'كورسات كاملة', '$fullCourses', trend: 'مربوطة الآن بقاعدة SQLite محلية')),
+              Expanded(child: StatCard(Icons.bolt, 'نظام ساعات', '$hoursSystem', color: AppTheme.gold, trend: 'تمييز مستقل داخل البيانات الحقيقية')),
+              Expanded(child: StatCard(Icons.groups, 'إجمالي المسجلين', '$totalEnrolled', color: AppTheme.success)),
+              Expanded(child: StatCard(Icons.schedule_send, 'في الانتظار', '$totalWaiting', color: AppTheme.danger)),
+            ]),
+            const SizedBox(height: 16),
+            Wrap(crossAxisAlignment: WrapCrossAlignment.center, spacing: 14, runSpacing: 10, children: [
+              _filterGroup('النظام:', ['الكل', ...kSystems], _system, AppTheme.purple,
+                  (v) => setState(() => _system = v)),
+              _filterGroup('الفترة:', ['الكل', ...kPeriods], _period, AppTheme.seed,
+                  (v) => setState(() => _period = v)),
+              _filterGroup('النوع:', typeOptions, _type, AppTheme.success,
+                  (v) => setState(() => _type = v)),
+              SizedBox(
+                width: 300,
+                child: TextField(
+                  controller: _search,
+                  onChanged: (_) => setState(() {}),
+                  decoration: InputDecoration(
+                    hintText: 'ابحث باسم الدورة أو المادة أو المدرس...',
+                    prefixIcon: const Icon(Icons.search),
+                    isDense: true,
+                    filled: true,
+                    fillColor: AppTheme.surface,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(color: AppTheme.line),
+                    ),
+                  ),
+                ),
+              ),
+            ]),
+            const Divider(height: 26),
+            Row(children: [
+              Text('${groups.length} دورة / مجموعة',
+                  style: const TextStyle(fontSize: 12.5, color: AppTheme.textSub)),
+              const Spacer(),
+              PrimaryButton(
+                'إنشاء دورة جديدة',
+                icon: Icons.add_circle,
+                onPressed: () => showSidePanel(
+                  context,
+                  title: 'إنشاء دورة جديدة',
+                  builder: (_) => _CourseForm(onSaved: _snackAndRefresh),
+                ),
+              ),
+            ]),
+            const SizedBox(height: 14),
+            if (groups.isEmpty)
+              Container(
+                width: double.infinity,
+                decoration: cardDeco(),
+                padding: const EdgeInsets.all(28),
+                child: Column(children: [
+                  const Icon(Icons.school_outlined, size: 42, color: AppTheme.seed),
+                  const SizedBox(height: 10),
+                  const Text('قاعدة الدورات فارغة حاليًا',
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppTheme.dark)),
+                  const SizedBox(height: 6),
+                  const Text(
+                    'وهذا مقصود لتبدأ التجربة الحقيقية من الصفر: أنشئ دورة، ثم أضف طالبًا، ثم قدّم طلب التسجيل واعتمده.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 12.5, color: AppTheme.textSub),
+                  ),
+                  const SizedBox(height: 14),
+                  PrimaryButton(
+                    'ابدأ بإنشاء أول دورة',
+                    icon: Icons.add_box_outlined,
+                    onPressed: () => showSidePanel(
+                      context,
+                      title: 'إنشاء دورة جديدة',
+                      builder: (_) => _CourseForm(onSaved: _snackAndRefresh),
+                    ),
+                  ),
+                ]),
+              )
+            else
+              GridView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                  maxCrossAxisExtent: 430,
+                  mainAxisExtent: 310,
+                  crossAxisSpacing: 14,
+                  mainAxisSpacing: 14,
+                ),
+                itemCount: groups.length,
+                itemBuilder: (_, i) => _GroupCard(
+                  group: groups[i],
+                  onSaved: _snackAndRefresh,
+                ),
+              ),
+          ]),
+        );
+      },
     );
   }
 
-  Widget _filterGroup(String label, List<String> items, String current, Color color,
-      void Function(String) onSelect) {
+  Future<void> _resetDatabase() async {
+    final ok = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('تأكيد تهيئة القاعدة'),
+            content: const Text(
+              'سيتم حذف جميع الطلاب والمدرسين والمواد والدورات والطلبات والانتظار من القاعدة المحلية نهائيًا، ثم تبدأ من الصفر. هل تتابع؟',
+            ),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('إلغاء')),
+              FilledButton(
+                onPressed: () => Navigator.pop(context, true),
+                style: FilledButton.styleFrom(backgroundColor: AppTheme.danger),
+                child: const Text('نعم، فرّغها'),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+    if (!ok) return;
+
+    final result = await store.resetAllLocalData();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(result.message), behavior: SnackBarBehavior.floating, width: 520),
+    );
+  }
+
+  void _snackAndRefresh(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), behavior: SnackBarBehavior.floating, width: 460),
+    );
+  }
+
+  Widget _filterGroup(
+    String label,
+    List<String> items,
+    String current,
+    Color color,
+    void Function(String) onSelect,
+  ) {
     return Row(mainAxisSize: MainAxisSize.min, children: [
       Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppTheme.dark2)),
       const SizedBox(width: 6),
@@ -100,8 +297,11 @@ class _CoursesScreenState extends State<CoursesScreen> {
             ),
             selected: current == f,
             selectedColor: color.withOpacity(.15),
-            labelStyle: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold,
-                color: current == f ? color : AppTheme.textSub),
+            labelStyle: TextStyle(
+              fontSize: 11.5,
+              fontWeight: FontWeight.bold,
+              color: current == f ? color : AppTheme.textSub,
+            ),
             side: BorderSide(color: current == f ? color.withOpacity(.5) : AppTheme.line),
             onSelected: (_) => onSelect(f),
           ),
@@ -110,11 +310,10 @@ class _CoursesScreenState extends State<CoursesScreen> {
   }
 }
 
-// ==================== البطاقة التفاعلية ====================
 class _GroupCard extends StatefulWidget {
-  final Group g;
-  final VoidCallback onSaved;
-  const _GroupCard(this.g, {required this.onSaved});
+  final GroupOption group;
+  final void Function(String) onSaved;
+  const _GroupCard({required this.group, required this.onSaved});
 
   @override
   State<_GroupCard> createState() => _GroupCardState();
@@ -125,19 +324,20 @@ class _GroupCardState extends State<_GroupCard> {
 
   @override
   Widget build(BuildContext context) {
-    final g = widget.g;
+    final g = widget.group;
     final full = g.seatsLeft <= 0;
     return MouseRegion(
       cursor: SystemMouseCursors.click,
       onEnter: (_) => setState(() => _hover = true),
       onExit: (_) => setState(() => _hover = false),
       child: GestureDetector(
-        onTap: () => showSidePanel(context, title: 'تفاصيل الدورة وتعديلها',
-            builder: (_) => _CourseForm(existing: g, onSaved: widget.onSaved)),
+        onTap: () => showSidePanel(
+          context,
+          title: 'ملف الدورة',
+          builder: (_) => _CourseDetailsPanel(groupId: g.id, onSaved: widget.onSaved),
+        ),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 180),
-          curve: Curves.easeOut,
-          // تأثير hover هادئ: تظليل خفيف + حدود أنعم + ظل خفيف جدًا
           decoration: BoxDecoration(
             color: _hover ? const Color(0xFFFBFDFF) : Colors.white,
             borderRadius: BorderRadius.circular(16),
@@ -147,118 +347,89 @@ class _GroupCardState extends State<_GroupCard> {
                 : const [BoxShadow(color: Color(0x0A0F172A), blurRadius: 10, offset: Offset(0, 2))],
           ),
           padding: const EdgeInsets.all(16),
-          child: Stack(children: [
-            Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Row(children: [
-                Expanded(child: Text(g.name,
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold,
-                        color: _hover ? AppTheme.seed : AppTheme.dark),
-                    maxLines: 1, overflow: TextOverflow.ellipsis)),
-                PeriodBadge(g.period),
-              ]),
-              const SizedBox(height: 5),
-              Text('${g.subject} • ${g.teacher}',
-                  style: const TextStyle(fontSize: 11.5, color: AppTheme.textSub),
-                  maxLines: 1, overflow: TextOverflow.ellipsis),
-              const SizedBox(height: 8),
-              Wrap(spacing: 6, runSpacing: 6, children: [
-                // نظام الدراسة
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: g.isHoursSystem ? AppTheme.gold.withOpacity(.12) : AppTheme.seed.withOpacity(.12),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: g.isHoursSystem ? AppTheme.gold.withOpacity(.4) : AppTheme.seed.withOpacity(.4)),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(children: [
+              Expanded(
+                child: Text(
+                  g.name,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: _hover ? AppTheme.seed : AppTheme.dark,
                   ),
-                  child: Row(mainAxisSize: MainAxisSize.min, children: [
-                    Icon(g.isHoursSystem ? Icons.bolt : Icons.auto_stories, size: 12,
-                        color: g.isHoursSystem ? AppTheme.gold : AppTheme.seed),
-                    const SizedBox(width: 4),
-                    Text(g.system, style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold,
-                        color: g.isHoursSystem ? AppTheme.gold : AppTheme.seed)),
-                  ]),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
-                if (g.type.isNotEmpty)
-                  StatusChip(g.type, color: AppTheme.success),
-                StatusChip(
-                    g.status == 'running'
-                        ? 'منطلقة'
-                        : (g.status == 'pending'
-                            ? 'بانتظار اعتماد'
-                            : (g.status == 'closed' ? 'مغلقة' : 'مفتوحة')),
-                    color: g.status == 'running'
-                        ? AppTheme.success
-                        : (g.status == 'pending'
-                            ? AppTheme.gold
-                            : (g.status == 'closed' ? AppTheme.dark2 : AppTheme.seed))),
-                if (g.financeLocked)
-                  StatusChip('🔒 قفل مالي', color: AppTheme.dark2),
-                CountBadge('انتظار', g.waiting),
-              ]),
-              const SizedBox(height: 10),
-              FillBar(g.enrolled, g.capacity),
-              const Spacer(),
-              Row(children: [
-                Icon(Icons.meeting_room, size: 13, color: Colors.grey.shade500),
-                const SizedBox(width: 3),
-                Text(g.room, style: const TextStyle(fontSize: 10.5, color: AppTheme.textSub)),
-                const SizedBox(width: 8),
-                Expanded(child: Text(g.days, style: const TextStyle(fontSize: 10, color: AppTheme.textSub),
-                    maxLines: 1, overflow: TextOverflow.ellipsis)),
-              ]),
-              const Divider(height: 14),
-              Row(children: [
-                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text(g.isHoursSystem ? 'رسم الساعة' : 'رسم الدورة',
-                      style: const TextStyle(fontSize: 9.5, color: AppTheme.textSub)),
-                  Text(money(g.price),
-                      style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.bold, color: AppTheme.dark)),
-                ]),
-                const Spacer(),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: (g.isHoursSystem ? AppTheme.success : AppTheme.purple).withOpacity(.09),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    g.isHoursSystem ? '💵 دفع فوري/جلسة' : '💳 ${g.installments == 1 ? "كامل الرسم" : "${g.installments} أقساط"}',
-                    style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold,
-                        color: g.isHoursSystem ? AppTheme.success : AppTheme.purple),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Text('${g.sessionsDone}/${g.sessionsTotal}',
-                    style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppTheme.textSub)),
-              ]),
-              const SizedBox(height: 6),
-              if (full)
-                const Text('المجموعة مكتملة — التسجيل بقائمة الانتظار',
-                    style: TextStyle(fontSize: 11, color: AppTheme.danger, fontWeight: FontWeight.bold))
-              else
-                Text('متاح ${g.seatsLeft} مقعد',
-                    style: const TextStyle(fontSize: 11, color: AppTheme.success, fontWeight: FontWeight.bold)),
+              ),
+              PeriodBadge(g.period),
             ]),
-            // ===== زر التعديل الهادئ — الزاوية اليسرى السفلية =====
-            Positioned(
-              bottom: 0,
-              left: 0,
-              child: Tooltip(message: 'تعديل بيانات الدورة',
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(8),
-                  onTap: () => showSidePanel(context, title: 'تعديل بيانات الدورة',
-                      builder: (_) => _CourseForm(existing: g, onSaved: widget.onSaved)),
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 180),
-                    padding: const EdgeInsets.all(5),
-                    decoration: BoxDecoration(
-                      color: _hover ? AppTheme.seed.withOpacity(.08) : Colors.transparent,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Icon(Icons.edit_outlined,
-                        size: 15, color: _hover ? AppTheme.seed : Colors.grey.shade400),
+            const SizedBox(height: 6),
+            Text('${g.subject} • ${g.teacher}',
+                style: const TextStyle(fontSize: 11.5, color: AppTheme.textSub),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis),
+            const SizedBox(height: 10),
+            Wrap(spacing: 6, runSpacing: 6, children: [
+              StatusChip(g.system, color: g.isHoursSystem ? AppTheme.gold : AppTheme.seed),
+              if (g.type.trim().isNotEmpty) StatusChip(g.type, color: AppTheme.success),
+              StatusChip(_statusLabel(g.status), color: _statusColor(g.status)),
+              CountBadge('انتظار', g.waiting),
+              if (g.financeLocked) const StatusChip('🔒 قفل مالي', color: AppTheme.dark2),
+            ]),
+            const SizedBox(height: 12),
+            FillBar(g.enrolled, g.capacity),
+            const SizedBox(height: 10),
+            Row(children: [
+              Icon(Icons.meeting_room, size: 13, color: Colors.grey.shade500),
+              const SizedBox(width: 3),
+              Text(g.room, style: const TextStyle(fontSize: 10.5, color: AppTheme.textSub)),
+            ]),
+            const SizedBox(height: 4),
+            Text(g.days, style: const TextStyle(fontSize: 10.5, color: AppTheme.textSub)),
+            const Spacer(),
+            Row(children: [
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  const Text('الجلسات', style: TextStyle(fontSize: 10, color: AppTheme.textSub)),
+                  Text('${g.executedSessions}/${g.sessionsTotal}',
+                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppTheme.dark)),
+                ]),
+              ),
+              if (AppSession.canViewFinancial)
+                Expanded(
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+                    Text(g.isHoursSystem ? 'رسم الساعة' : 'رسم الدورة',
+                        style: const TextStyle(fontSize: 10, color: AppTheme.textSub)),
+                    Text(money(g.price),
+                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppTheme.dark)),
+                  ]),
+                )
+              else
+                const Expanded(
+                  child: Align(
+                    alignment: AlignmentDirectional.centerEnd,
+                    child: Text('القسم المالي مخفي', style: TextStyle(fontSize: 10.5, color: AppTheme.textSub)),
                   ),
                 ),
+            ]),
+            const SizedBox(height: 8),
+            if (full)
+              const Text('المجموعة مكتملة — أي اعتماد جديد سيتحول إلى الانتظار',
+                  style: TextStyle(fontSize: 11, color: AppTheme.danger, fontWeight: FontWeight.bold))
+            else
+              Text('متاح ${g.seatsLeft} مقعد',
+                  style: const TextStyle(fontSize: 11, color: AppTheme.success, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 8),
+            Align(
+              alignment: AlignmentDirectional.centerStart,
+              child: TextButton.icon(
+                onPressed: () => showSidePanel(
+                  context,
+                  title: 'تعديل بيانات الدورة',
+                  builder: (_) => _CourseForm(existing: g, onSaved: widget.onSaved),
+                ),
+                icon: const Icon(Icons.edit_outlined, size: 16),
+                label: const Text('تعديل'),
               ),
             ),
           ]),
@@ -268,10 +439,239 @@ class _GroupCardState extends State<_GroupCard> {
   }
 }
 
-// ==================== نموذج الدورة: إنشاء + تعديل ====================
+class _CourseDetailsPanel extends StatefulWidget {
+  final int groupId;
+  final void Function(String) onSaved;
+  const _CourseDetailsPanel({required this.groupId, required this.onSaved});
+
+  @override
+  State<_CourseDetailsPanel> createState() => _CourseDetailsPanelState();
+}
+
+class _CourseDetailsPanelState extends State<_CourseDetailsPanel> {
+  late Future<CourseDetailsSnapshot> _future;
+  final store = RegistrationStore.instance;
+
+  @override
+  void initState() {
+    super.initState();
+    _future = store.loadCourseDetails(widget.groupId);
+  }
+
+  Future<void> _reload() async {
+    await store.refresh();
+    setState(() {
+      _future = store.loadCourseDetails(widget.groupId);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<CourseDetailsSnapshot>(
+      future: _future,
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) {
+          if (snapshot.hasError) {
+            return Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Text('تعذر تحميل تفاصيل الدورة: ${snapshot.error}'),
+              ),
+            );
+          }
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        final data = snapshot.data!;
+        final g = data.group;
+        return ListView(
+          padding: const EdgeInsets.all(20),
+          children: [
+            Row(children: [
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(g.name,
+                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppTheme.dark)),
+                  const SizedBox(height: 4),
+                  Text('${g.subject} • ${g.teacher}', style: const TextStyle(fontSize: 12, color: AppTheme.textSub)),
+                ]),
+              ),
+              PeriodBadge(g.period),
+            ]),
+            const SizedBox(height: 12),
+            Wrap(spacing: 6, runSpacing: 6, children: [
+              StatusChip(g.system, color: g.isHoursSystem ? AppTheme.gold : AppTheme.seed),
+              if (g.type.trim().isNotEmpty) StatusChip(g.type, color: AppTheme.success),
+              StatusChip(_statusLabel(g.status), color: _statusColor(g.status)),
+              if (g.financeLocked) const StatusChip('🔒 قفل مالي', color: AppTheme.dark2),
+            ]),
+            const SizedBox(height: 16),
+            Container(
+              decoration: cardDeco(),
+              padding: const EdgeInsets.all(14),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                const Text('معلومات الدورة',
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppTheme.dark)),
+                const SizedBox(height: 10),
+                InfoRow('المدرس', g.teacher),
+                InfoRow('الفترة', g.period == 'ظهر' ? 'ع الظهر' : g.period),
+                InfoRow('القاعة', g.room),
+                InfoRow('الجدول', g.days.isEmpty ? '—' : g.days),
+                InfoRow('السعة', '${g.capacity}'),
+                InfoRow('المسجلون فعليًا', '${data.students.length}', valueColor: AppTheme.success),
+                InfoRow('قائمة الانتظار', '${data.waiting.length}', valueColor: AppTheme.gold),
+                InfoRow('الجلسات المنفذة', '${g.executedSessions}/${g.sessionsTotal}'),
+                if (AppSession.canViewFinancial) ...[
+                  InfoRow(g.isHoursSystem ? 'رسم الساعة' : 'رسم الدورة', money(g.price)),
+                  InfoRow('الإيراد المحقق حتى الآن', money(g.accruedRevenue), valueColor: AppTheme.success),
+                  InfoRow('نسبة المعلم', g.teacherPct > 0 ? '%${g.teacherPct.toStringAsFixed(0)}' : 'غير محددة بعد'),
+                  InfoRow('مستحق المدرس المنفذ', money(g.accruedTeacherComp), valueColor: AppTheme.gold),
+                  InfoRow(
+                    'طريقة الدفع',
+                    g.isHoursSystem ? 'رسم الساعة — دفع عند الجلسة' : 'رسم الدورة — ${g.installments == 1 ? 'كامل الرسم' : '${g.installments} دفعات'}',
+                  ),
+                ] else
+                  const Padding(
+                    padding: EdgeInsets.only(top: 6),
+                    child: Text('القسم المالي مخفي لهذا الدور.',
+                        style: TextStyle(fontSize: 12, color: AppTheme.textSub, fontWeight: FontWeight.bold)),
+                  ),
+              ]),
+            ),
+            const SizedBox(height: 16),
+            SectionCard(
+              'الطلاب المسجلون بالأسماء والمعلومات',
+              actionLabel: 'تحديث',
+              onAction: _reload,
+              child: data.students.isEmpty
+                  ? const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 16),
+                      child: Center(
+                        child: Text('لا يوجد طلاب مسجلون في هذه الدورة بعد.',
+                            style: TextStyle(fontSize: 12.5, color: AppTheme.textSub)),
+                      ),
+                    )
+                  : Column(
+                      children: [
+                        for (final s in data.students)
+                          Container(
+                            margin: const EdgeInsets.only(bottom: 10),
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: AppTheme.surface,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: AppTheme.line),
+                            ),
+                            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                              Row(children: [
+                                Expanded(
+                                  child: Text('${s.name} — ${s.code}',
+                                      style: const TextStyle(
+                                          fontSize: 12.5, fontWeight: FontWeight.bold, color: AppTheme.dark)),
+                                ),
+                                StatusChip(s.status, color: StatusChip.forStatus(s.status)),
+                              ]),
+                              const SizedBox(height: 6),
+                              Text('الهاتف: ${s.phone}', style: const TextStyle(fontSize: 11.5, color: AppTheme.textSub)),
+                              Text('ولي الأمر: ${s.guardian}', style: const TextStyle(fontSize: 11.5, color: AppTheme.textSub)),
+                              Text('تاريخ الربط بالدورة: ${_fmtDate(s.enrolledAt)}',
+                                  style: const TextStyle(fontSize: 11.5, color: AppTheme.textSub)),
+                              if (AppSession.canViewFinancial) ...[
+                                const SizedBox(height: 6),
+                                Wrap(spacing: 8, runSpacing: 8, children: [
+                                  StatusChip(s.financialStatus, color: s.balanceDue <= 0 ? AppTheme.success : AppTheme.gold),
+                                  Text('الإجمالي: ${money(s.totalFee)}',
+                                      style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold)),
+                                  Text(
+                                    s.balanceDue <= 0 ? 'مسدّد بالكامل' : 'المتبقي: ${money(s.balanceDue)}',
+                                    style: TextStyle(
+                                      fontSize: 11.5,
+                                      fontWeight: FontWeight.bold,
+                                      color: s.balanceDue <= 0 ? AppTheme.success : AppTheme.danger,
+                                    ),
+                                  ),
+                                ]),
+                              ],
+                            ]),
+                          ),
+                      ],
+                    ),
+            ),
+            const SizedBox(height: 16),
+            SectionCard(
+              'قائمة الانتظار الخاصة بهذه الدورة',
+              child: data.waiting.isEmpty
+                  ? const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 16),
+                      child: Center(
+                        child: Text('لا يوجد طلاب على الانتظار لهذه الدورة.',
+                            style: TextStyle(fontSize: 12.5, color: AppTheme.textSub)),
+                      ),
+                    )
+                  : Column(
+                      children: [
+                        for (final w in data.waiting)
+                          Container(
+                            margin: const EdgeInsets.only(bottom: 10),
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFFFBEB),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: AppTheme.gold.withOpacity(.35)),
+                            ),
+                            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                              Row(children: [
+                                Expanded(
+                                  child: Text('${w.name} — ${w.code}',
+                                      style: const TextStyle(
+                                          fontSize: 12.5, fontWeight: FontWeight.bold, color: AppTheme.dark)),
+                                ),
+                                const StatusChip('قائمة انتظار', color: AppTheme.gold),
+                              ]),
+                              const SizedBox(height: 6),
+                              Text('الهاتف: ${w.phone}', style: const TextStyle(fontSize: 11.5, color: AppTheme.textSub)),
+                              Text('ولي الأمر: ${w.guardian}', style: const TextStyle(fontSize: 11.5, color: AppTheme.textSub)),
+                              Text('تاريخ الإدراج: ${_fmtDate(w.createdAt)}',
+                                  style: const TextStyle(fontSize: 11.5, color: AppTheme.textSub)),
+                            ]),
+                          ),
+                      ],
+                    ),
+            ),
+            const SizedBox(height: 16),
+            Row(children: [
+              Expanded(
+                child: PrimaryButton(
+                  'تعديل بيانات الدورة',
+                  icon: Icons.edit_outlined,
+                  onPressed: () => showSidePanel(
+                    context,
+                    title: 'تعديل بيانات الدورة',
+                    builder: (_) => _CourseForm(
+                      existing: g,
+                      onSaved: (msg) {
+                        widget.onSaved(msg);
+                        _reload();
+                      },
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: PrimaryButton('تحديث الملف', icon: Icons.refresh, color: AppTheme.dark2, onPressed: _reload),
+              ),
+            ]),
+          ],
+        );
+      },
+    );
+  }
+}
+
 class _CourseForm extends StatefulWidget {
-  final Group? existing;      // غير فارغ = وضع التعديل
-  final VoidCallback onSaved;
+  final GroupOption? existing;
+  final void Function(String) onSaved;
   const _CourseForm({this.existing, required this.onSaved});
 
   @override
@@ -279,401 +679,274 @@ class _CourseForm extends StatefulWidget {
 }
 
 class _CourseFormState extends State<_CourseForm> {
+  final store = RegistrationStore.instance;
+
   late final TextEditingController _name;
+  late final TextEditingController _room;
   late final TextEditingController _price;
-  late final TextEditingController _sessions;
-  String? _subject, _teacher, _period, _system, _type;
-  int _installments = 2;
-  late final Set<String> _days;
-  String _msg = '';
-  bool _newSubject = false, _newType = false;
+  late final TextEditingController _capacity;
+  late final TextEditingController _sessionsDone;
+  late final TextEditingController _sessionsTotal;
+  late final TextEditingController _teacherPct;
+  late final TextEditingController _time;
   final _newSubjectCtrl = TextEditingController();
   final _newTypeCtrl = TextEditingController();
 
-  bool get _editing => widget.existing != null;
+  String? _subject;
+  String? _teacher;
+  String _period = 'مسائي';
+  String _system = 'كورس كامل';
+  String _status = 'open';
+  String? _type;
+  bool _newSubject = false;
+  bool _newType = false;
+  bool _financeLocked = false;
+  int _installments = 2;
+  final Set<String> _days = <String>{};
+  String _msg = '';
 
-  /// فلترة وفرز المدرسين: المختصون بالمادة المختارة أولًا، ثم البقية
-  List<String> _teachersFor(String? subject) {
-    if (subject == null) return [for (final t in kTeachers) '${t.name} — ${t.subject}'];
-    final keys = subject
-        .replaceAll('اللغة', '')
-        .split(' ')
-        .where((k) => k.trim().length > 2)
-        .toList();
-    bool matches(Teacher t) => keys.any((k) => t.subject.contains(k));
-    final matched = kTeachers.where(matches).map((t) => '${t.name} — ${t.subject}').toList();
-    final others = kTeachers.where((t) => !matches(t)).map((t) => '${t.name} — ${t.subject}').toList();
-    return [...matched, ...others]; // المختصون في الأعلى (فرز)
-  }
+  bool get _editing => widget.existing != null;
 
   @override
   void initState() {
     super.initState();
     final g = widget.existing;
     _name = TextEditingController(text: g?.name ?? '');
+    _room = TextEditingController(text: g?.room ?? 'قاعة 1');
     _price = TextEditingController(text: g == null ? '' : g.price.toStringAsFixed(0));
-    _sessions = TextEditingController(text: g == null ? '' : g.sessionsTotal.toString());
+    _capacity = TextEditingController(text: g == null ? '12' : g.capacity.toString());
+    _sessionsDone = TextEditingController(text: g == null ? '0' : g.sessionsDone.toString());
+    _sessionsTotal = TextEditingController(text: g == null ? '12' : g.sessionsTotal.toString());
+    _teacherPct = TextEditingController(text: g == null ? '30' : g.teacherPct.toStringAsFixed(0));
     _subject = g?.subject;
+    _teacher = g == null ? null : _teacherLabel(g.teacher, g.subject);
     _period = g?.period ?? 'مسائي';
     _system = g?.system ?? 'كورس كامل';
-    _type = (g?.type.isEmpty ?? true) ? null : g!.type;
-    _installments = g?.installments == 0 ? 2 : (g?.installments ?? 2);
-    if (_installments < 1) _installments = 1;
-    _days = g == null ? <String>{} : _daysFrom(g.days);
-    _teacher = g == null ? null : '${g.teacher} — ${_teacherSubject(g.teacher)}';
-  }
+    _status = g?.status ?? 'open';
+    _type = (g == null || g.type.trim().isEmpty) ? null : g.type;
+    _financeLocked = g?.financeLocked ?? false;
+    _installments = g == null ? 2 : (g.installments < 1 ? 1 : g.installments);
 
-  String _teacherSubject(String name) {
-    for (final t in kTeachers) { if (t.name == name) return t.subject; }
-    return '';
-  }
-
-  Set<String> _daysFrom(String days) {
-    final s = <String>{};
-    for (final d in ['السبت','الأحد','الاثنين','الثلاثاء','الأربعاء','الخميس']) {
-      if (days.contains(d)) s.add(d);
-    }
-    return s;
+    final parsed = _parseSchedule(g?.days ?? '');
+    _days.addAll(parsed.$1);
+    _time = TextEditingController(text: parsed.$2.isEmpty ? _defaultTime(_period) : parsed.$2);
   }
 
   @override
   void dispose() {
-    _name.dispose(); _price.dispose(); _sessions.dispose();
-    _newSubjectCtrl.dispose(); _newTypeCtrl.dispose();
+    _name.dispose();
+    _room.dispose();
+    _price.dispose();
+    _capacity.dispose();
+    _sessionsDone.dispose();
+    _sessionsTotal.dispose();
+    _teacherPct.dispose();
+    _time.dispose();
+    _newSubjectCtrl.dispose();
+    _newTypeCtrl.dispose();
     super.dispose();
-  }
-
-  void _save() {
-    if (_editing && widget.existing!.financeLocked) {
-      setState(() => _msg = '🔒 هذه الدورة مقفلة ماليًا. افتح القفل أولًا بصلاحية المدير العام إن أردت تعديل الجانب المالي.');
-      return;
-    }
-    final subject = _newSubject ? _newSubjectCtrl.text.trim() : _subject;
-    if (_name.text.trim().isEmpty || subject == null || subject.isEmpty ||
-        _teacher == null || _days.isEmpty || _type == null) {
-      setState(() => _msg = '⚠ أكمل: الاسم، النوع، المادة، المدرس، واختر الأيام');
-      return;
-    }
-    addSubjectIfNew(subject);
-    addCourseTypeIfNew(_type!);
-    final price = (double.tryParse(_price.text) ?? 0).round();
-    final total = int.tryParse(_sessions.text) ?? 12;
-    final days = _days.join(' + ');
-    final timeByPeriod = _period == 'صباحي' ? '10:00ص' : (_period == 'ظهر' ? '1:00 ظهرًا' : '5:00م');
-    final teacherName = _teacher!.split(' — ').first;
-    final newGroup = Group(
-      _name.text.trim(), subject, teacherName, _period!, 
-      widget.existing?.enrolled ?? 0, widget.existing?.capacity ?? 12,
-      widget.existing?.waiting ?? 0,
-      widget.existing?.status ?? 'pending', widget.existing?.room ?? 'قاعة 1',
-      '$days • $timeByPeriod', price, widget.existing?.sessionsDone ?? 0, total,
-      _system!, _system == 'نظام ساعات' ? 0 : _installments,
-      type: _type!, teacherPct: widget.existing?.teacherPct ?? 0.0,
-      financeLocked: widget.existing?.financeLocked ?? false,
-    );
-    if (!_editing) {
-      kNotifications.insert(0, NotificationItem(
-          'دورة جديدة بانتظار موافقة المدير العام',
-          newGroup.name + ' — أضافها مدير الدورات، بانتظار الاعتماد وتحديد نسبة المعلم',
-          'الآن', 'approval'));
-      addAudit('إنشاء دورة', newGroup.name, 'تم إنشاء دورة جديدة بانتظار اعتماد المدير العام وتحديد نسبة المعلم.');
-    }
-    setState(() {
-      if (_editing) {
-        final i = kGroups.indexOf(widget.existing!);
-        if (i != -1) kGroups[i] = newGroup;
-      } else {
-        kGroups.add(newGroup);
-      }
-    });
-    if (_editing) {
-      addAudit('تعديل دورة', newGroup.name, 'تم تعديل بيانات الدورة مع الحفاظ على سجلها المالي الحالي.');
-    }
-    widget.onSaved();
-    Navigator.pop(context);
-  }
-
-  void _lockFinance() {
-    final g = widget.existing;
-    if (g == null || g.financeLocked) return;
-    final i = kGroups.indexOf(g);
-    if (i == -1) return;
-    kGroups[i] = Group(
-      g.name, g.subject, g.teacher, g.period, g.enrolled, g.capacity, g.waiting, 'closed',
-      g.room, g.days, g.price, g.sessionsDone, g.sessionsTotal, g.system, g.installments,
-      type: g.type, teacherPct: g.teacherPct, financeLocked: true,
-    );
-    addAudit('قفل مالي', g.name, 'تم قفل الدورة ماليًا عند الإغلاق لمنع أي تعديل مالي لاحق.');
-    kNotifications.insert(0, NotificationItem(
-      'قفل مالي لدورة',
-      g.name + ' — تم قفل الدفتر المالي للدورة',
-      'الآن', 'audit'));
-    widget.onSaved();
-    Navigator.pop(context);
   }
 
   @override
   Widget build(BuildContext context) {
-    final teachers = _teachersFor(_newSubject ? null : _subject);
-    // إن كان المدرس المحفوظ غير موجود بالقائمة (تعديل) أعد إدراجه أولًا
-    if (_teacher != null && !teachers.contains(_teacher)) teachers.insert(0, _teacher!);
+    final subjectValue = _newSubject ? _newSubjectCtrl.text.trim() : (_subject ?? '');
+    final teacherItems = _teacherOptions(subjectValue.isEmpty ? null : subjectValue);
+    if (_teacher != null && !teacherItems.contains(_teacher)) {
+      teacherItems.insert(0, _teacher!);
+    }
 
-    return ListView(padding: const EdgeInsets.all(22), children: [
-      if (_editing)
-        Container(
-          margin: const EdgeInsets.only(bottom: 14),
-          padding: const EdgeInsets.all(10),
-          decoration: BoxDecoration(
-            color: widget.existing!.financeLocked
-                ? AppTheme.dark2.withOpacity(.06)
-                : (widget.existing!.status == 'pending' ? AppTheme.gold.withOpacity(.07) : AppTheme.seed.withOpacity(.06)),
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(
-              color: widget.existing!.financeLocked
-                  ? AppTheme.dark2.withOpacity(.28)
-                  : (widget.existing!.status == 'pending' ? AppTheme.gold.withOpacity(.35) : Colors.transparent),
-            ),
-          ),
-          child: Text(
-            widget.existing!.financeLocked
-                ? '🔒 هذه الدورة مقفلة ماليًا — أي تعديل مالي لاحق يحتاج فتح القفل بصلاحية المدير العام.'
-                : (widget.existing!.status == 'pending'
-                    ? '⏳ بانتظار موافقة المدير العام — يُعتمد ويُحدد فيها نسبة المعلم من لوحة الاعتماد'
-                    : '✏ وضع التعديل — غيّر ما تشاء ثم اضغط حفظ'),
-            style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold,
-                color: widget.existing!.financeLocked
-                    ? AppTheme.dark2
-                    : (widget.existing!.status == 'pending' ? AppTheme.gold : AppTheme.seed))),
-        ),
-      _label('اسم المجموعة *'),
-      TextField(controller: _name, decoration: _dec('مثال: إنجليزي B1 — مسائي ج')),
-      const SizedBox(height: 14),
-
-      // ===== نوع الدورة =====
-      _label('نوع الدورة *'),
-      const SizedBox(height: 6),
-      if (!_newType)
-        Row(children: [
-          Expanded(child: _dropdown([...kCourseTypes], _type, (v) => setState(() => _type = v))),
-          TextButton.icon(
-            onPressed: () => setState(() => _newType = true),
-            icon: const Icon(Icons.add, size: 16),
-            label: const Text('نوع جديد', style: TextStyle(fontSize: 11.5)),
-          ),
-        ])
-      else
-        Row(children: [
-          Expanded(child: TextField(
-            controller: _newTypeCtrl,
-            decoration: InputDecoration(hintText: 'مثال: تأسيس جامعي', isDense: true, filled: true, fillColor: AppTheme.surface,
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppTheme.line))),
-          )),
-          TextButton(onPressed: () => setState(() => _newType = false), child: const Text('إلغاء', style: TextStyle(fontSize: 11.5))),
-        ]),
-      const SizedBox(height: 14),
-
-      // ===== نظام الدراسة =====
-      _label('نظام الدراسة *'),
-      const SizedBox(height: 6),
-      Row(children: [
-        for (final sys in kSystems)
-          Padding(
-            padding: const EdgeInsets.only(left: 8),
-            child: ChoiceChip(
-              label: Text(sys == 'كورس كامل' ? '📚 كورس كامل' : '⚡ نظام ساعات'),
-              selected: _system == sys,
-              selectedColor: (sys == 'كورس كامل' ? AppTheme.seed : AppTheme.gold).withOpacity(.15),
-              onSelected: (_) => setState(() => _system = sys),
-            ),
-          ),
-      ]),
-      const SizedBox(height: 14),
-
-      // ===== المادة (سجل موحد) =====
-      _label('المادة * — تسمية موحدة'),
-      const SizedBox(height: 6),
-      if (!_newSubject)
-        Row(children: [
-          Expanded(child: _dropdown([...kSubjectNames], _subject, (v) => setState(() { _subject = v; _teacher = null; }))),
-          TextButton.icon(
-            onPressed: () => setState(() => _newSubject = true),
-            icon: const Icon(Icons.add, size: 16),
-            label: const Text('مادة جديدة', style: TextStyle(fontSize: 11.5)),
-          ),
-        ])
-      else
-        Row(children: [
-          Expanded(child: TextField(
-            controller: _newSubjectCtrl,
-            decoration: InputDecoration(hintText: 'اسم المادة الجديدة', isDense: true, filled: true, fillColor: AppTheme.surface,
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppTheme.line))),
-          )),
-          TextButton(onPressed: () => setState(() => _newSubject = false), child: const Text('إلغاء', style: TextStyle(fontSize: 11.5))),
-        ]),
-      const SizedBox(height: 14),
-
-      // ===== المدرس — مفلتر حسب المادة =====
-      Row(children: [
-        _label('المدرس * — المختصون بالمادة أولًا'),
-        const SizedBox(width: 6),
-        Tooltip(message: 'القائمة مرتبة: مدرسو هذه المادة في الأعلى، ثم بقية الكادر',
-          child: Icon(Icons.filter_list, size: 15, color: AppTheme.textSub)),
-      ]),
-      const SizedBox(height: 6),
-      _dropdown(teachers, _teacher, (v) => setState(() => _teacher = v)),
-      const SizedBox(height: 14),
-
-      Row(children: [
-        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          _label(_system == 'نظام ساعات' ? 'رسم الساعة (ل.س) *' : 'رسم الدورة (ل.س) *'),
-          const SizedBox(height: 6),
-          TextField(controller: _price, keyboardType: TextInputType.number,
-              decoration: _dec(_system == 'نظام ساعات' ? '15000' : '180000')),
-        ])),
-        const SizedBox(width: 12),
-        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          _label(_system == 'نظام ساعات' ? 'عدد الجلسات المتاحة' : 'عدد الحصص/الساعات *'),
-          const SizedBox(height: 6),
-          TextField(controller: _sessions, keyboardType: TextInputType.number, decoration: _dec('24')),
-        ])),
-      ]),
-      const SizedBox(height: 14),
-
-      if (_system == 'كورس كامل') ...[
-        _label('سياسة الدفع (تحددها الإدارة)'),
-        const SizedBox(height: 6),
-        Wrap(spacing: 8, runSpacing: 6, children: [
-          for (final (lbl, n) in [('كامل الرسم', 1), ('قسطان', 2), ('3 أقساط', 3), ('4 أقساط', 4)])
-            ChoiceChip(
-              label: Text(lbl, style: const TextStyle(fontSize: 11.5)),
-              selected: _installments == n,
-              selectedColor: AppTheme.purple.withOpacity(.15),
-              onSelected: (_) => setState(() => _installments = n),
-            ),
-        ]),
-        const SizedBox(height: 14),
-      ],
-
-      _label('الفترة *'),
-      const SizedBox(height: 6),
-      Row(children: [
-        for (final p in kPeriods)
-          Padding(
-            padding: const EdgeInsets.only(left: 8),
-            child: ChoiceChip(
-              label: Text(p == 'صباحي' ? '☀ صباحية' : (p == 'ظهر' ? '🌤 ع الظهر' : '🌙 مسائية')),
-              selected: _period == p,
-              selectedColor: AppTheme.seed.withOpacity(.15),
-              onSelected: (_) => setState(() => _period = p),
-            ),
-          ),
-      ]),
-      const SizedBox(height: 16),
-
-      _label('أيام الانعقاد *'),
-      const SizedBox(height: 6),
-      Wrap(spacing: 6, runSpacing: 6, children: [
-        for (final d in ['السبت', 'الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس'])
-          FilterChip(
-            label: Text(d, style: const TextStyle(fontSize: 11.5)),
-            selected: _days.contains(d),
-            selectedColor: AppTheme.seed.withOpacity(.18),
-            onSelected: (v) => setState(() { v ? _days.add(d) : _days.remove(d); }),
-          ),
-      ]),
-      const SizedBox(height: 20),
-
-      if (_editing) ...[
-        const SizedBox(height: 14),
-        _finSummary(),
-      ],
-      const SizedBox(height: 18),
-      if (_msg.isNotEmpty)
-        Padding(padding: const EdgeInsets.only(bottom: 10),
-            child: Text(_msg, style: const TextStyle(color: AppTheme.danger, fontWeight: FontWeight.bold))),
-      PrimaryButton(
-          _editing
-              ? (widget.existing!.financeLocked ? 'الدورة مقفلة ماليًا' : 'حفظ التعديلات')
-              : 'حفظ الدورة وإتاحة التسجيل بها',
-          icon: _editing ? (widget.existing!.financeLocked ? Icons.lock : Icons.save) : Icons.add_circle,
-          onPressed: _editing && widget.existing!.financeLocked
-              ? () => setState(() => _msg = '🔒 الدورة مقفلة ماليًا. افتح القفل بصلاحية المدير العام قبل أي تعديل.')
-              : _save),
-    ]);
-  }
-
-  Widget _finSummary() {
-    final g = widget.existing!;
-    final teacher = teacherByName(g.teacher);
-    final degree = teacher?.degree ?? '—';
-    final paid = paidCompForCourse(g.name);
-    final approved = approvedCompForCourse(g.name);
-    final pending = approved - paid;
-    return Container(
-      decoration: BoxDecoration(
-        color: AppTheme.purple.withOpacity(.05),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppTheme.purple.withOpacity(.25))),
-      padding: const EdgeInsets.all(12),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: [
-          const Icon(Icons.calculate, size: 15, color: AppTheme.purple),
-          const SizedBox(width: 6),
-          const Text('الملخص المالي — سياسات v3.6 المعتمدة',
-              style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold, color: AppTheme.purple)),
-        ]),
-        const SizedBox(height: 8),
-        Wrap(spacing: 6, runSpacing: 6, children: [
-          StatusChip('استحقاق بالجلسة المنفذة', color: AppTheme.seed),
-          StatusChip('سقف نسبة ≤ 50%', color: AppTheme.success),
-          StatusChip('معتمد ≠ مصروف', color: AppTheme.gold),
-          if (g.financeLocked) StatusChip('🔒 مقفلة ماليًا', color: AppTheme.dark2),
-        ]),
-        const SizedBox(height: 8),
-        InfoRow('المدرس', g.teacher + ' — ' + degree),
-        InfoRow('الإيراد التعاقدي الكامل', money(g.revenue)),
-        InfoRow('الإيراد المحقق حتى الآن', money(g.accruedRevenue), valueColor: AppTheme.success),
-        InfoRow('الإيراد المؤجل', money(g.deferredRevenue), valueColor: AppTheme.textSub),
-        InfoRow('نسبة المعلم', g.teacherPct > 0 ? '%${g.teacherPct.toStringAsFixed(0)}' : 'لم تُحدد بعد (من صلاحية المدير العام)'),
-        InfoRow('مستحق المدرس المنفذ', money(g.accruedTeacherComp), valueColor: AppTheme.gold),
-        InfoRow('المصروف فعليًا', money(paid), valueColor: AppTheme.purple),
-        InfoRow('المتبقي قيد الصرف', money(pending > 0 ? pending : 0), valueColor: pending > 0 ? AppTheme.danger : AppTheme.success),
-        InfoRow('هامش المعهد الحالي', '%${g.instituteMarginPct.toStringAsFixed(0)}',
-            valueColor: g.instituteMarginPct > 70 ? AppTheme.gold : AppTheme.success),
-        if (g.instituteMarginPct > 70) ...[
-          const SizedBox(height: 6),
+    return ListView(
+      padding: const EdgeInsets.all(22),
+      children: [
+        if (_msg.isNotEmpty) ...[
           Container(
             padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(color: AppTheme.gold.withOpacity(.07), borderRadius: BorderRadius.circular(10)),
-            child: const Text(
-              'تنبيه: هامش المعهد أعلى من 70% — راجع النسبة قبل تثبيت السياسة المالية للدورة.',
-              style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppTheme.gold),
+            decoration: BoxDecoration(
+              color: AppTheme.gold.withOpacity(.08),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: AppTheme.gold.withOpacity(.35)),
+            ),
+            child: Text(_msg, style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold, color: AppTheme.gold)),
+          ),
+          const SizedBox(height: 12),
+        ],
+        _label('اسم الدورة *'),
+        TextField(controller: _name, decoration: _dec('مثال: إنجليزي B1 — مسائي أ')),
+        const SizedBox(height: 14),
+        _label('نوع الدورة'),
+        const SizedBox(height: 6),
+        if (!_newType)
+          Row(children: [
+            Expanded(child: _dropdown(_typeOptions(), _type, (v) => setState(() => _type = v))),
+            TextButton.icon(
+              onPressed: () => setState(() => _newType = true),
+              icon: const Icon(Icons.add, size: 16),
+              label: const Text('نوع جديد', style: TextStyle(fontSize: 11.5)),
+            ),
+          ])
+        else
+          Row(children: [
+            Expanded(child: TextField(controller: _newTypeCtrl, decoration: _dec('مثال: تأسيس جامعي'))),
+            TextButton(onPressed: () => setState(() => _newType = false), child: const Text('إلغاء')),
+          ]),
+        const SizedBox(height: 14),
+        _label('نظام الدراسة *'),
+        const SizedBox(height: 6),
+        Row(children: [
+          for (final sys in kSystems)
+            Padding(
+              padding: const EdgeInsets.only(left: 8),
+              child: ChoiceChip(
+                label: Text(sys == 'كورس كامل' ? '📚 كورس كامل' : '⚡ نظام ساعات'),
+                selected: _system == sys,
+                selectedColor: (sys == 'كورس كامل' ? AppTheme.seed : AppTheme.gold).withOpacity(.15),
+                onSelected: (_) => setState(() => _system = sys),
+              ),
+            ),
+        ]),
+        const SizedBox(height: 14),
+        _label('المادة * — تسمية موحدة'),
+        const SizedBox(height: 6),
+        if (!_newSubject)
+          Row(children: [
+            Expanded(child: _dropdown(_subjectOptions(), _subject, (v) => setState(() { _subject = v; _teacher = null; }))),
+            TextButton.icon(
+              onPressed: () => setState(() => _newSubject = true),
+              icon: const Icon(Icons.add, size: 16),
+              label: const Text('مادة جديدة', style: TextStyle(fontSize: 11.5)),
+            ),
+          ])
+        else
+          Row(children: [
+            Expanded(child: TextField(controller: _newSubjectCtrl, decoration: _dec('اسم المادة الجديدة'))),
+            TextButton(onPressed: () => setState(() => _newSubject = false), child: const Text('إلغاء')),
+          ]),
+        const SizedBox(height: 14),
+        _label('المدرس *'),
+        const SizedBox(height: 6),
+        _dropdown(teacherItems, _teacher, (v) => setState(() => _teacher = v)),
+        const SizedBox(height: 14),
+        _label('الفترة *'),
+        const SizedBox(height: 6),
+        Row(children: [
+          for (final period in kPeriods)
+            Padding(
+              padding: const EdgeInsets.only(left: 8),
+              child: ChoiceChip(
+                label: Text(period == 'صباحي' ? '☀ صباحي' : (period == 'ظهر' ? '🌤 ظهر' : '🌙 مسائي')),
+                selected: _period == period,
+                selectedColor: AppTheme.seed.withOpacity(.15),
+                onSelected: (_) => setState(() {
+                  _period = period;
+                  if (_time.text.trim().isEmpty || _time.text.trim() == _defaultTime(_period)) {
+                    _time.text = _defaultTime(period);
+                  }
+                }),
+              ),
+            ),
+        ]),
+        const SizedBox(height: 14),
+        _label('حالة الدورة'),
+        const SizedBox(height: 6),
+        _dropdown(const ['open', 'running', 'closed'], _status, (v) => setState(() => _status = v ?? 'open')),
+        const SizedBox(height: 14),
+        _label('أيام الدوام *'),
+        const SizedBox(height: 6),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (final day in const ['السبت', 'الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس'])
+              FilterChip(
+                label: Text(day),
+                selected: _days.contains(day),
+                onSelected: (_) => setState(() {
+                  if (_days.contains(day)) {
+                    _days.remove(day);
+                  } else {
+                    _days.add(day);
+                  }
+                }),
+              ),
+          ],
+        ),
+        const SizedBox(height: 14),
+        _label('الوقت'),
+        TextField(controller: _time, decoration: _dec('مثال: 5:00م أو 1:00 ظهرًا')),
+        const SizedBox(height: 14),
+        Row(children: [
+          Expanded(child: _numberField(_room, 'القاعة', keyboardType: TextInputType.text)),
+          const SizedBox(width: 10),
+          Expanded(child: _numberField(_capacity, 'السعة')),
+        ]),
+        const SizedBox(height: 14),
+        Row(children: [
+          Expanded(child: _numberField(_sessionsDone, 'الجلسات المنفذة')),
+          const SizedBox(width: 10),
+          Expanded(child: _numberField(_sessionsTotal, 'إجمالي الجلسات')),
+        ]),
+        const SizedBox(height: 14),
+        if (AppSession.canViewFinancial) ...[
+          Row(children: [
+            Expanded(child: _numberField(_price, _system == 'نظام ساعات' ? 'رسم الساعة' : 'رسم الدورة')),
+            const SizedBox(width: 10),
+            Expanded(child: _numberField(_teacherPct, 'نسبة المعلم %')),
+          ]),
+          if (_system != 'نظام ساعات') ...[
+            const SizedBox(height: 14),
+            _label('طريقة تحصيل رسم الدورة'),
+            const SizedBox(height: 6),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final n in const [1, 2, 3, 4, 6])
+                  ChoiceChip(
+                    label: Text(n == 1 ? 'كامل الرسم' : '$n دفعات'),
+                    selected: _installments == n,
+                    onSelected: (_) => setState(() => _installments = n),
+                  ),
+              ],
+            ),
+          ],
+          const SizedBox(height: 14),
+          SwitchListTile(
+            value: _financeLocked,
+            onChanged: (v) => setState(() => _financeLocked = v),
+            contentPadding: EdgeInsets.zero,
+            title: const Text('قفل مالي لهذه الدورة'),
+            subtitle: const Text('يُستخدم لاحقًا لتقييد التعديلات المالية بعد الإغلاق.'),
+          ),
+        ],
+        const SizedBox(height: 18),
+        Row(children: [
+          Expanded(
+            child: PrimaryButton(
+              _editing ? 'حفظ التعديلات' : 'حفظ الدورة',
+              icon: Icons.save_outlined,
+              onPressed: _save,
             ),
           ),
-        ],
-        if (!g.financeLocked) ...[
-          const SizedBox(height: 10),
-          Align(
-            alignment: AlignmentDirectional.centerStart,
-            child: PrimaryButton('قفل الدورة ماليًا عند الإغلاق',
-                icon: Icons.lock_outline, color: AppTheme.dark2, onPressed: _lockFinance),
-          ),
-        ] else ...[
-          const SizedBox(height: 10),
-          const Text('🔒 القفل المالي فعال — يمنع تعديل السعر، النسبة، والمصروفات بأثر رجعي.',
-              style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppTheme.dark2)),
-        ],
-      ]),
+        ]),
+      ],
     );
   }
 
-  Widget _label(String t) => Text(t, style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.bold, color: AppTheme.dark2));
-  InputDecoration _dec(String hint) => InputDecoration(
-      hintText: hint, isDense: true, filled: true, fillColor: AppTheme.surface,
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppTheme.line)));
+  Widget _label(String t) => Text(t,
+      style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.bold, color: AppTheme.dark2));
 
-  Widget _dropdown(List<String> items, String? value, void Function(String?) onChanged) =>
-      Container(
+  InputDecoration _dec(String hint) => InputDecoration(
+        hintText: hint,
+        isDense: true,
+        filled: true,
+        fillColor: AppTheme.surface,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: const BorderSide(color: AppTheme.line),
+        ),
+      );
+
+  Widget _dropdown(List<String> items, String? value, void Function(String?) onChanged) => Container(
         padding: const EdgeInsets.symmetric(horizontal: 12),
         decoration: BoxDecoration(border: Border.all(color: AppTheme.line), borderRadius: BorderRadius.circular(10)),
         child: DropdownButtonHideUnderline(
@@ -681,181 +954,154 @@ class _CourseFormState extends State<_CourseForm> {
             value: (value != null && items.contains(value)) ? value : null,
             isExpanded: true,
             hint: const Text('اختر...', style: TextStyle(fontSize: 12.5)),
-            items: [for (final i in items) DropdownMenuItem(value: i, child: Text(i, style: const TextStyle(fontSize: 12.5), overflow: TextOverflow.ellipsis))],
+            items: [
+              for (final i in items)
+                DropdownMenuItem(value: i, child: Text(i, style: const TextStyle(fontSize: 12.5), overflow: TextOverflow.ellipsis)),
+            ],
             onChanged: onChanged,
           ),
         ),
       );
-}
 
+  Widget _numberField(TextEditingController controller, String label,
+          {TextInputType keyboardType = TextInputType.number}) =>
+      TextField(
+        controller: controller,
+        keyboardType: keyboardType,
+        decoration: _dec(label),
+      );
 
-// ==================== لافتة الانتظار ====================
-class _PendingBanner extends StatelessWidget {
-  final int count;
-  final VoidCallback onOpen;
-  const _PendingBanner({required this.count, required this.onOpen});
+  List<String> _subjectOptions() {
+    return <String>{...kSubjectNames, ...store.subjects.map((s) => s.name)}.toList();
+  }
 
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: AppTheme.gold.withOpacity(.07),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppTheme.gold.withOpacity(.4)),
-      ),
-      padding: const EdgeInsets.all(14),
-      child: Row(children: [
-        const Icon(Icons.gavel, color: AppTheme.gold),
-        const SizedBox(width: 10),
-        Expanded(child: Text(
-          '⏳ ' + count.toString() + ' دورة/دورات أنشأها مدير الدورات — بانتظار موافقتك: اعتماد مع تحديد نسبة المعلم، أو تعديل، أو رفض',
-          style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.bold, color: AppTheme.gold))),
-        PrimaryButton('مراجعة واعتماد', icon: Icons.gavel, color: AppTheme.gold, onPressed: onOpen),
-      ]),
+  List<String> _typeOptions() {
+    return <String>{...kCourseTypes, ...store.groups.map((g) => g.type).where((v) => v.trim().isNotEmpty)}.toList();
+  }
+
+  List<String> _teacherOptions(String? subject) {
+    final labels = <String>[];
+    for (final t in kTeachers) {
+      labels.add(_teacherLabel(t.name, t.subject));
+    }
+    for (final t in store.teachers) {
+      labels.add(_teacherLabel(t.name, t.specialization));
+    }
+
+    final unique = labels.toSet().toList();
+    if (subject == null || subject.trim().isEmpty) return unique;
+
+    final matched = unique.where((t) => _looseMatch(t, subject)).toList();
+    final others = unique.where((t) => !_looseMatch(t, subject)).toList();
+    return [...matched, ...others];
+  }
+
+  String _teacherLabel(String name, String subject) => '$name — $subject';
+
+  (Set<String>, String) _parseSchedule(String schedule) {
+    if (schedule.trim().isEmpty) return (<String>{}, '');
+    final parts = schedule.split('•');
+    final daysPart = parts.first.trim();
+    final timePart = parts.length > 1 ? parts.sublist(1).join('•').trim() : '';
+    final result = <String>{};
+    for (final d in const ['السبت', 'الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس']) {
+      if (daysPart.contains(d)) result.add(d);
+    }
+    return (result, timePart);
+  }
+
+  String _defaultTime(String period) {
+    if (period == 'صباحي') return '10:00ص';
+    if (period == 'ظهر') return '1:00 ظهرًا';
+    return '5:00م';
+  }
+
+  bool _looseMatch(String a, String b) {
+    final normA = a.replaceAll('اللغة', '').replaceAll('—', ' ').replaceAll(RegExp(r'\s+'), ' ').trim();
+    final normB = b.replaceAll('اللغة', '').replaceAll('—', ' ').replaceAll(RegExp(r'\s+'), ' ').trim();
+    final aTokens = normA.split(' ').where((e) => e.length > 2).toSet();
+    final bTokens = normB.split(' ').where((e) => e.length > 2).toSet();
+    return aTokens.intersection(bTokens).isNotEmpty;
+  }
+
+  Future<void> _save() async {
+    final subject = _newSubject ? _newSubjectCtrl.text.trim() : (_subject ?? '').trim();
+    final type = _newType ? _newTypeCtrl.text.trim() : (_type ?? '').trim();
+    final teacherName = (_teacher ?? '').split(' — ').first.trim();
+    final daysText = _days.toList().join(' + ');
+    final timeText = _time.text.trim().isEmpty ? _defaultTime(_period) : _time.text.trim();
+    final schedule = _days.isEmpty ? '' : '$daysText • $timeText';
+
+    if (_name.text.trim().isEmpty || subject.isEmpty || teacherName.isEmpty || schedule.isEmpty) {
+      setState(() => _msg = '⚠ أكمل: اسم الدورة، المادة، المدرس، وأيام الدوام.');
+      return;
+    }
+
+    addSubjectIfNew(subject);
+    if (type.isNotEmpty) addCourseTypeIfNew(type);
+
+    final result = await store.saveGroup(
+      groupId: widget.existing?.id,
+      name: _name.text.trim(),
+      subject: subject,
+      teacher: teacherName,
+      period: _period,
+      system: _system,
+      room: _room.text.trim(),
+      days: schedule,
+      price: double.tryParse(_price.text) ?? 0.0,
+      capacity: int.tryParse(_capacity.text) ?? 12,
+      enrolledCount: widget.existing?.enrolled ?? 0,
+      waitingCount: widget.existing?.waiting ?? 0,
+      status: _status,
+      type: type,
+      sessionsDone: int.tryParse(_sessionsDone.text) ?? 0,
+      sessionsTotal: int.tryParse(_sessionsTotal.text) ?? 12,
+      installments: _system == 'نظام ساعات' ? 1 : _installments,
+      teacherPct: AppSession.canViewFinancial ? (double.tryParse(_teacherPct.text) ?? 0.0) : (widget.existing?.teacherPct ?? 0.0),
+      financeLocked: AppSession.canViewFinancial ? _financeLocked : (widget.existing?.financeLocked ?? false),
     );
+
+    if (!mounted) return;
+    if (!result.ok) {
+      setState(() => _msg = result.message);
+      return;
+    }
+
+    widget.onSaved(result.message);
+    Navigator.pop(context);
   }
 }
 
-// ==================== لوحة موافقة المدير العام ====================
-class _ApprovalPanel extends StatefulWidget {
-  final VoidCallback onChanged;
-  const _ApprovalPanel({required this.onChanged});
-
-  @override
-  State<_ApprovalPanel> createState() => _ApprovalPanelState();
+String _statusLabel(String status) {
+  switch (status) {
+    case 'running':
+      return 'منطلقة';
+    case 'closed':
+      return 'مغلقة';
+    case 'pending':
+      return 'بانتظار اعتماد';
+    default:
+      return 'مفتوحة';
+  }
 }
 
-class _ApprovalPanelState extends State<_ApprovalPanel> {
-  final Map<String, double> _pct = {};
-
-  double pctOf(Group g) => _pct[g.name] ?? 30;
-
-  void _approve(Group g) {
-    final pct = pctOf(g);
-    if (pct > 50) return;
-    final i = kGroups.indexOf(g);
-    Group approved = g;
-    if (i != -1) {
-      approved = Group(g.name, g.subject, g.teacher, g.period, g.enrolled, g.capacity,
-          g.waiting, 'open', g.room, g.days, g.price, g.sessionsDone, g.sessionsTotal,
-          g.system, g.installments, type: g.type, teacherPct: pct, financeLocked: g.financeLocked);
-      kGroups[i] = approved;
-    }
-    final teacher = teacherByName(g.teacher);
-    final amount = approved.accruedTeacherComp;
-    kCompNotices.insert(0, CompNotice('2026-09-05', g.teacher,
-        teacher == null ? '—' : teacher.degree, g.name, g.system,
-        approved.executedSessions, g.enrolled, pct, amount, 'معتمد'));
-    if (marginNeedsWarning(pct)) {
-      addAudit('مراجعة هامش', g.name,
-          'هامش المعهد الحالي ${ (100 - pct).toStringAsFixed(0)}% وتجاوز عتبة 70% قبل الاعتماد.');
-    }
-    addAudit('اعتماد مالي', g.name,
-        'تم اعتماد نسبة ${pct.toStringAsFixed(0)}% وربط المستحق بالجلسات المنفذة فقط.');
-    kNotifications.insert(0, NotificationItem('إشعار محاسبة — تعويض مدرس معتمد',
-        g.teacher + ' — ' + g.name + ' بنسبة %' + pct.toStringAsFixed(0) + ' = ' + fmt(amount) + ' ل.س (على الجلسات المنفذة)',
-        'الآن', 'payment'));
-    widget.onChanged();
-    setState(() {});
-    if (kGroups.where((x) => x.status == 'pending').isEmpty) Navigator.pop(context);
+Color _statusColor(String status) {
+  switch (status) {
+    case 'running':
+      return AppTheme.success;
+    case 'closed':
+      return AppTheme.dark2;
+    case 'pending':
+      return AppTheme.gold;
+    default:
+      return AppTheme.seed;
   }
+}
 
-  void _reject(Group g) {
-    kGroups.remove(g);
-    addAudit('رفض دورة', g.name, 'تم رفض الدورة من لوحة اعتماد المدير العام.');
-    widget.onChanged();
-    setState(() {});
-    if (kGroups.where((x) => x.status == 'pending').isEmpty) Navigator.pop(context);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final pending = kGroups.where((g) => g.status == 'pending').toList();
-    if (pending.isEmpty) {
-      return const Center(child: Text('لا دورات معلقة — كلها معتمدة ✓',
-          style: TextStyle(color: AppTheme.success, fontWeight: FontWeight.bold)));
-    }
-    return ListView(padding: const EdgeInsets.all(20), children: [
-      Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(color: AppTheme.purple.withOpacity(.06), borderRadius: BorderRadius.circular(10)),
-        child: const Text(
-          'بصلاحية المدير العام: حدد نسبة المعلم من رسوم الدورة ضمن سقف أعلى 50%.\n'
-          '📚 كورس كامل: الاستحقاق المنفذ = نسبة × ((رسم الدورة ÷ عدد الجلسات) × الجلسات المنفذة × عدد الطلاب)\n'
-          '⚡ نظام ساعات: الاستحقاق المنفذ = نسبة × (رسم الساعة × الجلسات المنفذة × عدد الطلاب)\n'
-          'يُنشأ سجل تدقيق تلقائي، ويظهر تنبيه عندما يتجاوز هامش المعهد 70%، ثم يصل إشعار للمحاسبة فور الاعتماد.',
-          style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppTheme.purple)),
-      ),
-      const SizedBox(height: 14),
-      for (final g in pending)
-        Container(
-          margin: const EdgeInsets.only(bottom: 14),
-          decoration: cardDeco(),
-          padding: const EdgeInsets.all(14),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Row(children: [
-              Expanded(child: Text(g.name, style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.bold, color: AppTheme.dark))),
-              StatusChip(g.system, color: g.isHoursSystem ? AppTheme.gold : AppTheme.seed),
-            ]),
-            const SizedBox(height: 4),
-            Text(g.subject + ' • ' + g.type,
-                style: const TextStyle(fontSize: 11, color: AppTheme.textSub)),
-            const SizedBox(height: 6),
-            InfoRow('المدرس', g.teacher),
-            InfoRow(g.isHoursSystem ? 'رسم الساعة × الجلسات المتاحة' : 'رسم الدورة', money(g.price) + (g.isHoursSystem ? ' × ${g.sessionsTotal} جلسة' : '')),
-            InfoRow('الطلاب الحاليون', '${g.enrolled}'),
-            InfoRow('الإيراد التعاقدي', money(g.revenue)),
-            InfoRow('الإيراد المحقق حتى الآن', money(g.accruedRevenue), valueColor: AppTheme.success),
-            const SizedBox(height: 8),
-            Row(children: [
-              const Text('نسبة المعلم:', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppTheme.dark2)),
-              const Spacer(),
-              Text('%' + pctOf(g).toStringAsFixed(0),
-                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: AppTheme.purple)),
-            ]),
-            Wrap(spacing: 6, runSpacing: 6, children: [
-              for (final p in [20.0, 25.0, 30.0, 35.0, 40.0, 50.0])
-                ChoiceChip(
-                  label: Text('%' + p.toStringAsFixed(0), style: const TextStyle(fontSize: 11.5)),
-                  selected: pctOf(g) == p,
-                  selectedColor: AppTheme.purple.withOpacity(.15),
-                  onSelected: (_) => setState(() => _pct[g.name] = p),
-                ),
-            ]),
-            const SizedBox(height: 8),
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(color: AppTheme.gold.withOpacity(.07), borderRadius: BorderRadius.circular(10)),
-              child: Row(children: [
-                const Icon(Icons.payments, size: 16, color: AppTheme.gold),
-                const SizedBox(width: 8),
-                Text('مستحق المدرس المنفذ الآن: ' + money(g.accruedRevenue * pctOf(g) / 100),
-                    style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.bold, color: AppTheme.gold)),
-                const Spacer(),
-                Text('صافي المعهد المحقق: ' + money(g.accruedRevenue * (100 - pctOf(g)) / 100),
-                    style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold, color: AppTheme.success)),
-              ]),
-            ),
-            if (marginNeedsWarning(pctOf(g)))
-              Container(
-                margin: const EdgeInsets.only(top: 8),
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(color: AppTheme.danger.withOpacity(.06), borderRadius: BorderRadius.circular(10)),
-                child: Text(
-                  'تنبيه قبل الاعتماد: هامش المعهد الحالي %' + (100 - pctOf(g)).toStringAsFixed(0) + ' وهو أعلى من 70%. راجع النسبة أو دوّن سبب الاعتماد في السجل.',
-                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppTheme.danger),
-                ),
-              ),
-            const SizedBox(height: 10),
-            Row(children: [
-              Expanded(child: PrimaryButton('اعتماد وتحديد النسبة', icon: Icons.check_circle,
-                  color: AppTheme.success, onPressed: () => _approve(g))),
-              const SizedBox(width: 8),
-              Expanded(child: PrimaryButton('رفض الدورة', icon: Icons.cancel,
-                  color: AppTheme.danger, onPressed: () => _reject(g))),
-            ]),
-          ]),
-        ),
-    ]);
-  }
+String _fmtDate(String raw) {
+  final dt = DateTime.tryParse(raw);
+  if (dt == null) return raw;
+  String two(int v) => v.toString().padLeft(2, '0');
+  return '${dt.year}-${two(dt.month)}-${two(dt.day)} ${two(dt.hour)}:${two(dt.minute)}';
 }

@@ -295,7 +295,7 @@ class _DonutPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final total = values.fold<double>(0, (a, b) => a + b);
+    final total = values.fold<double>(0.0, (a, b) => a + b);
     if (total == 0) return;
     final rect = Offset.zero & size;
     const stroke = 22.0;

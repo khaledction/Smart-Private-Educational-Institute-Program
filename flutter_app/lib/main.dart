@@ -5,6 +5,7 @@ import 'theme.dart';
 import 'widgets/ui.dart';
 import 'data/mock_data.dart';
 import 'data/registration_store.dart';
+import 'data/student_store.dart';
 import 'screens/dashboard.dart';
 import 'screens/students.dart';
 import 'screens/registration.dart';
@@ -35,6 +36,7 @@ void main() async {
     });
   }
   await RegistrationStore.instance.init();
+  await StudentStore.instance.init();
   runApp(const MaehdiApp());
 }
 
@@ -120,7 +122,7 @@ class _MainShellState extends State<MainShell> {
               const SizedBox(width: 10),
               const Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Text('معهدّي', style: TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.bold)),
-                Text('إدارة المعاهد الذكي • v3.7', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 9.5)),
+                Text('إدارة المعاهد الذكي • v3.8', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 9.5)),
               ]),
             ]),
             const SizedBox(height: 18),
