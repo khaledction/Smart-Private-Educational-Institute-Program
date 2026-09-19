@@ -3,7 +3,6 @@ import 'dart:io';
 import 'package:path_provider/path_provider.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
-import 'mock_data.dart';
 
 class LocalRegistrationDb {
   LocalRegistrationDb._();
@@ -377,50 +376,6 @@ class LocalRegistrationDb {
 
     await db.execute('DROP VIEW IF EXISTS v_groups_registration');
     await _createSchema(db);
-  }
-
-  Future<void> _migrateToV4(DatabaseExecutor db) async {
-    final requestColumns = await _tableColumns(db, 'registration_requests_local');
-    if (!requestColumns.contains('target_group_id')) {
-      await db.execute('ALTER TABLE registration_requests_local ADD COLUMN target_group_id INTEGER');
-    }
-
-    final waitingColumns = await _tableColumns(db, 'waiting_lists_local');
-    if (!waitingColumns.contains('group_id')) {
-      await db.execute('ALTER TABLE waiting_lists_local ADD COLUMN group_id INTEGER');
-    }
-
-    await db.execute('DROP VIEW IF EXISTS v_registration_requests');
-    await db.execute('DROP VIEW IF EXISTS v_waiting_list');
-    await _createSchema(db);
-
-    await db.execute('''
-      UPDATE waiting_lists_local
-      SET group_id = (
-        SELECT r.target_group_id
-        FROM registration_requests_local r
-        WHERE r.student_id = waiting_lists_local.student_id
-          AND r.subject_id = waiting_lists_local.subject_id
-          AND r.teacher_id = waiting_lists_local.teacher_id
-          AND r.period = waiting_lists_local.period
-          AND r.target_group_id IS NOT NULL
-        ORDER BY r.id DESC
-        LIMIT 1
-      )
-      WHERE group_id IS NULL
-    ''');
-  }
-
-  Future<void> _applyPersistentRuntimeResetFlag(Database db) async {
-    final rows = await db.query(
-      'app_meta',
-      columns: ['value'],
-      where: 'key = ?',
-      whereArgs: ['runtime_demo_cleared'],
-      limit: 1,
-    );
-    if (rows.isEmpty) return;
-    resetRuntimeDemoData();
   }
 
   Future<void> _ensureOneTimeEmptyStart(Database db) async {

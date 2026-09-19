@@ -79,14 +79,12 @@ class _CoursesScreenState extends State<CoursesScreen> {
           typeOptions.insert(0, 'الكل');
         }
 
-        final pendingGroups = store.groups.where(_isPendingGroup).toList();
         final currentGroups = store.groups.where(_isCurrentGroup).toList();
         final endedGroups = store.groups.where(_isEndedGroupOnly).toList();
         final closedGroups = store.groups.where(_isClosedGroup).toList();
         final fullGroups = store.groups.where((g) => g.isFull).toList();
 
         final sourceGroups = switch (_view) {
-          'بانتظار الموافقة' => pendingGroups,
           'المنتهية' => endedGroups,
           'المغلقة' => closedGroups,
           _ => currentGroups,
@@ -168,10 +166,9 @@ class _CoursesScreenState extends State<CoursesScreen> {
                   spacing: 14,
                   runSpacing: 14,
                   children: [
-                    SizedBox(width: statWidth, child: StatCard(Icons.pending_actions, 'بانتظار الموافقة', '${pendingGroups.length}', color: AppTheme.gold, trend: 'لن تبدأ التسجيل قبل الاعتماد')),
-                    SizedBox(width: statWidth, child: StatCard(Icons.play_circle_outline, 'الدورات الجارية', '${currentGroups.length}', color: AppTheme.seed, trend: 'تشمل المفتوحة والجارية بعد الاعتماد')),
-                    SizedBox(width: statWidth, child: StatCard(Icons.groups_3_outlined, 'الدورات المكتملة', '${fullGroups.length}', color: AppTheme.purple, trend: 'بلغت الحد الأقصى للطلاب')),
-                    SizedBox(width: statWidth, child: StatCard(Icons.assignment_turned_in_outlined, 'الدورات المنتهية', '${endedGroups.length}', color: AppTheme.purple, trend: 'انتهى زمنها أو عدد ساعاتها')),
+                    SizedBox(width: statWidth, child: StatCard(Icons.play_circle_outline, 'الدورات الجارية', '${currentGroups.length}', color: AppTheme.seed, trend: 'تشمل المفتوحة والجارية قبل الإنهاء')),
+                    SizedBox(width: statWidth, child: StatCard(Icons.assignment_turned_in_outlined, 'الدورات المنتهية', '${endedGroups.length}', color: AppTheme.purple, trend: 'انتهى زمنها أو عدد جلساتها')),
+                    SizedBox(width: statWidth, child: StatCard(Icons.groups_3_outlined, 'الدورات المكتملة', '${fullGroups.length}', color: AppTheme.gold, trend: 'بلغت الحد الأقصى للطلاب')),
                     SizedBox(width: statWidth, child: StatCard(Icons.lock_outline, 'الدورات المغلقة', '${closedGroups.length}', color: AppTheme.dark2, trend: 'أغلقت بعد التصفية المالية')),
                   ],
                 );
@@ -183,7 +180,6 @@ class _CoursesScreenState extends State<CoursesScreen> {
               runSpacing: 8,
               crossAxisAlignment: WrapCrossAlignment.center,
               children: [
-                _viewChip('بانتظار الموافقة', pendingGroups.length, AppTheme.gold),
                 _viewChip('الجارية', currentGroups.length, AppTheme.seed),
                 _viewChip('المنتهية', endedGroups.length, AppTheme.purple),
                 _viewChip('المغلقة', closedGroups.length, AppTheme.dark2),
@@ -318,23 +314,17 @@ class _CoursesScreenState extends State<CoursesScreen> {
                   Icon(
                     _view == 'المغلقة'
                         ? Icons.lock_outline
-                        : (_view == 'المنتهية'
-                            ? Icons.assignment_turned_in_outlined
-                            : (_view == 'بانتظار الموافقة' ? Icons.pending_actions : Icons.school_outlined)),
+                        : (_view == 'المنتهية' ? Icons.assignment_turned_in_outlined : Icons.school_outlined),
                     size: 42,
                     color: _view == 'المغلقة'
                         ? AppTheme.dark2
-                        : (_view == 'المنتهية'
-                            ? AppTheme.purple
-                            : (_view == 'بانتظار الموافقة' ? AppTheme.gold : AppTheme.seed)),
+                        : (_view == 'المنتهية' ? AppTheme.purple : AppTheme.seed),
                   ),
                   const SizedBox(height: 10),
                   Text(
                     _view == 'المغلقة'
                         ? 'لا توجد دورات مغلقة بعد'
-                        : (_view == 'المنتهية'
-                            ? 'لا توجد دورات منتهية بعد'
-                            : (_view == 'بانتظار الموافقة' ? 'لا توجد دورات بانتظار الموافقة' : 'قاعدة الدورات الجارية فارغة حاليًا')),
+                        : (_view == 'المنتهية' ? 'لا توجد دورات منتهية بعد' : 'قاعدة الدورات الجارية فارغة حاليًا'),
                     style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppTheme.dark),
                   ),
                   const SizedBox(height: 6),
@@ -343,9 +333,7 @@ class _CoursesScreenState extends State<CoursesScreen> {
                         ? 'عندما تنتهي التصفية المالية وتُقفل الدورة نهائيًا ستظهر هنا.'
                         : (_view == 'المنتهية'
                             ? 'عندما ينتهي المسار الزمني أو عدد الساعات المعتمدة ستظهر الدورة هنا مع ملخص تقريري سريع.'
-                            : (_view == 'بانتظار الموافقة'
-                                ? 'كل دورة جديدة يمكن إبقاؤها هنا حتى اعتمادها وفتحها للتسجيل.'
-                                : 'ابدأ التجربة الحقيقية من الصفر: أنشئ دورة، ثم اعتمدها، ثم أضف طالبًا أو قدّم طلب تسجيل واعتمده.')),
+                            : 'ابدأ التجربة الحقيقية من الصفر: أنشئ دورة، ثم أضف طالبًا، ثم قدّم طلب التسجيل واعتمده.'),
                     textAlign: TextAlign.center,
                     style: const TextStyle(fontSize: 12.5, color: AppTheme.textSub),
                   ),
@@ -436,8 +424,6 @@ class _CoursesScreenState extends State<CoursesScreen> {
     );
   }
 
-  bool _isPendingGroup(GroupOption group) => group.status == 'pending';
-
   bool _isClosedGroup(GroupOption group) => group.status == 'closed' || group.financeLocked;
 
   bool _isEndedGroup(GroupOption group) =>
@@ -445,7 +431,7 @@ class _CoursesScreenState extends State<CoursesScreen> {
 
   bool _isEndedGroupOnly(GroupOption group) => _isEndedGroup(group) && !_isClosedGroup(group);
 
-  bool _isCurrentGroup(GroupOption group) => !_isPendingGroup(group) && !_isEndedGroup(group) && !_isClosedGroup(group);
+  bool _isCurrentGroup(GroupOption group) => !_isEndedGroup(group) && !_isClosedGroup(group);
 
   String _displayOptionLabel(String value) {
     if (value == 'الكل') return 'الكل';
@@ -599,10 +585,7 @@ class _GroupCardState extends State<_GroupCard> {
                 ),
             ]),
             const SizedBox(height: 8),
-            if (g.status == 'pending')
-              const Text('بانتظار موافقة الإدارة — لن تظهر في التسجيل قبل اعتمادها',
-                  style: TextStyle(fontSize: 11, color: AppTheme.gold, fontWeight: FontWeight.bold))
-            else if (full)
+            if (full)
               const Text('المجموعة مكتملة — أي اعتماد جديد سيتحول إلى الانتظار',
                   style: TextStyle(fontSize: 11, color: AppTheme.danger, fontWeight: FontWeight.bold))
             else
@@ -611,30 +594,14 @@ class _GroupCardState extends State<_GroupCard> {
             const SizedBox(height: 8),
             Align(
               alignment: AlignmentDirectional.centerStart,
-              child: Wrap(
-                spacing: 8,
-                runSpacing: 4,
-                children: [
-                  if (g.status == 'pending' && AppSession.canApproveCourses)
-                    FilledButton.icon(
-                      onPressed: () async {
-                        final result = await RegistrationStore.instance.approveGroup(g.id);
-                        if (!context.mounted) return;
-                        widget.onSaved(result.message);
-                      },
-                      icon: const Icon(Icons.verified_outlined, size: 16),
-                      label: const Text('اعتماد وفتح'),
-                    ),
-                  TextButton.icon(
-                    onPressed: () => showSidePanel(
-                      context,
-                      title: 'تعديل بيانات الدورة',
-                      builder: (_) => _CourseForm(existing: g, onSaved: widget.onSaved),
-                    ),
-                    icon: const Icon(Icons.edit_outlined, size: 16),
-                    label: const Text('تعديل'),
-                  ),
-                ],
+              child: TextButton.icon(
+                onPressed: () => showSidePanel(
+                  context,
+                  title: 'تعديل بيانات الدورة',
+                  builder: (_) => _CourseForm(existing: g, onSaved: widget.onSaved),
+                ),
+                icon: const Icon(Icons.edit_outlined, size: 16),
+                label: const Text('تعديل'),
               ),
             ),
           ]),
@@ -670,65 +637,28 @@ class _CourseDetailsPanelState extends State<_CourseDetailsPanel> {
     });
   }
 
-  Future<void> _deleteCourse(GroupOption group) async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('حذف الدورة'),
-        content: Text('سيتم حذف الدورة ${group.name} إذا لم تكن عليها تسجيلات أو انتظار أو طلبات مرتبطة. هل تريد المتابعة؟'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('إلغاء')),
-          FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: AppTheme.danger),
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('حذف'),
-          ),
-        ],
-      ),
-    );
-    if (ok != true) return;
-    final result = await store.deleteGroup(group.id);
-    if (!mounted) return;
-    widget.onSaved(result.message);
-    if (result.ok) {
-      Navigator.of(context).pop();
-      return;
-    }
-    await _reload();
-  }
-
   Future<void> _removeStudent(CourseDetailsSnapshot data, CourseStudentRecord student) async {
-    final mode = await showDialog<String>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('إخراج طالب من الدورة'),
-        content: Text(
-          'اختر ماذا تريد بعد حذف ${student.name} من هذه الدورة:\n\n'
-          '1) تحرير المقعد ليسمح بالتعويض تلقائيًا من الانتظار أو بإضافة طالب جديد لاحقًا.\n'
-          '2) إبقاء المقعد محجوزًا/ممتلئًا إذا كانت الدورة بدأت ولا تريد إدخال بديل الآن.\n\n'
-          'ملاحظة: حذف الطالب كاملًا من السجل العام يتم من شاشة الطلاب فقط.',
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('إلغاء')),
-          OutlinedButton(
-            onPressed: () => Navigator.pop(context, 'reserved'),
-            child: const Text('حذف مع إبقاء المقعد محجوزًا'),
+    final ok = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('حذف طالب من الدورة'),
+            content: Text(
+              'سيتم حذف ${student.name} من هذه الدورة وتحرير مقعده. وإذا كان يوجد طالب على قائمة الانتظار الخاصة بالدورة نفسها فسيُضاف تلقائيًا ويُفتح له إشعار واتساب. هل تريد المتابعة؟',
+            ),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('إلغاء')),
+              FilledButton(
+                onPressed: () => Navigator.pop(context, true),
+                style: FilledButton.styleFrom(backgroundColor: AppTheme.danger),
+                child: const Text('نعم، احذف من الدورة'),
+              ),
+            ],
           ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, 'free'),
-            style: FilledButton.styleFrom(backgroundColor: AppTheme.danger),
-            child: const Text('حذف وتحرير المقعد'),
-          ),
-        ],
-      ),
-    );
-    if (mode == null) return;
+        ) ??
+        false;
+    if (!ok) return;
 
-    final result = await store.removeStudentFromCourse(
-      groupId: data.group.id,
-      studentId: student.id,
-      keepSeatReserved: mode == 'reserved',
-    );
+    final result = await store.removeStudentFromCourse(groupId: data.group.id, studentId: student.id);
     if (!mounted) return;
     widget.onSaved(result.message);
     await _reload();
@@ -787,26 +717,18 @@ class _CourseDetailsPanelState extends State<_CourseDetailsPanel> {
                 InfoRow('الفترة', g.period == 'ظهر' ? 'ع الظهر' : g.period),
                 InfoRow('القاعة', g.room),
                 InfoRow('الجدول', g.days.isEmpty ? '—' : g.days),
-                InfoRow('السعة المعتمدة للدورة', '${g.capacity} طالب'),
+                InfoRow('السعة', '${g.capacity}'),
                 InfoRow('المسجلون فعليًا', '${data.students.length}', valueColor: AppTheme.success),
-                InfoRow('المقاعد المتاحة', '${g.seatsLeft > 0 ? g.seatsLeft : 0}', valueColor: g.seatsLeft > 0 ? AppTheme.seed : AppTheme.danger),
                 InfoRow('قائمة الانتظار', '${data.waiting.length}', valueColor: AppTheme.gold),
-                InfoRow(g.isHoursSystem ? 'الساعات المنفذة/المعتمدة' : 'الجلسات المنفذة/الإجمالي', '${g.executedSessions}/${g.sessionsTotal}'),
+                InfoRow('الجلسات المنفذة', '${g.executedSessions}/${g.sessionsTotal}'),
                 if (AppSession.canViewFinancial) ...[
                   InfoRow(g.isHoursSystem ? 'رسم الساعة' : 'رسم الدورة', money(g.price)),
-                  if (g.isHoursSystem) ...[
-                    InfoRow('عدد الساعات المعتمدة', '${g.sessionsTotal} ساعة'),
-                    InfoRow('إجمالي رسم الساعات للطالب', money(g.studentTotalPlannedFee), valueColor: AppTheme.purple),
-                  ] else ...[
-                    InfoRow('عدد الأقساط', g.installments == 1 ? 'كامل الرسم' : '${g.installments} أقساط'),
-                    InfoRow('قيمة القسط', money(g.installmentAmount), valueColor: AppTheme.gold),
-                  ],
-                  InfoRow('نسبة المدرس', g.teacherPct > 0 ? '%${g.teacherPct.toStringAsFixed(0)}' : 'غير محددة بعد'),
-                  InfoRow('مستحق المدرس المنفذ', money(g.accruedTeacherComp), valueColor: AppTheme.gold),
                   InfoRow('الإيراد المحقق حتى الآن', money(g.accruedRevenue), valueColor: AppTheme.success),
+                  InfoRow('نسبة المعلم', g.teacherPct > 0 ? '%${g.teacherPct.toStringAsFixed(0)}' : 'غير محددة بعد'),
+                  InfoRow('مستحق المدرس المنفذ', money(g.accruedTeacherComp), valueColor: AppTheme.gold),
                   InfoRow(
-                    'طريقة الاحتساب',
-                    g.isHoursSystem ? 'رسم الساعة × عدد الساعات' : 'رسم الدورة ÷ عدد الأقساط',
+                    'طريقة الدفع',
+                    g.isHoursSystem ? 'رسم الساعة — دفع عند الجلسة' : 'رسم الدورة — ${g.installments == 1 ? 'كامل الرسم' : '${g.installments} دفعات'}',
                   ),
                 ] else
                   const Padding(
@@ -819,19 +741,8 @@ class _CourseDetailsPanelState extends State<_CourseDetailsPanel> {
             const SizedBox(height: 16),
             SectionCard(
               'الطلاب المسجلون بالأسماء والمعلومات',
-              actionLabel: 'إضافة طالب',
-              onAction: () => showSidePanel(
-                context,
-                title: 'إضافة طالب إلى هذه الدورة',
-                builder: (_) => _AddStudentToCoursePanel(
-                  group: g,
-                  currentStudents: data.students,
-                  onDone: (msg) {
-                    widget.onSaved(msg);
-                    _reload();
-                  },
-                ),
-              ),
+              actionLabel: 'تحديث',
+              onAction: _reload,
               child: data.students.isEmpty
                   ? const Padding(
                       padding: EdgeInsets.symmetric(vertical: 16),
@@ -940,235 +851,32 @@ class _CourseDetailsPanelState extends State<_CourseDetailsPanel> {
                     ),
             ),
             const SizedBox(height: 16),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                SizedBox(
-                  width: 200,
-                  child: PrimaryButton(
-                    'تعديل بيانات الدورة',
-                    icon: Icons.edit_outlined,
-                    onPressed: () => showSidePanel(
-                      context,
-                      title: 'تعديل بيانات الدورة',
-                      builder: (_) => _CourseForm(
-                        existing: g,
-                        onSaved: (msg) {
-                          widget.onSaved(msg);
-                          _reload();
-                        },
-                      ),
-                    ),
-                  ),
-                ),
-                if (g.status == 'pending' && AppSession.canApproveCourses)
-                  SizedBox(
-                    width: 220,
-                    child: PrimaryButton(
-                      'اعتماد الدورة وفتح التسجيل',
-                      icon: Icons.verified_outlined,
-                      color: AppTheme.success,
-                      onPressed: () async {
-                        final result = await store.approveGroup(g.id);
-                        if (!mounted) return;
-                        widget.onSaved(result.message);
-                        await _reload();
+            Row(children: [
+              Expanded(
+                child: PrimaryButton(
+                  'تعديل بيانات الدورة',
+                  icon: Icons.edit_outlined,
+                  onPressed: () => showSidePanel(
+                    context,
+                    title: 'تعديل بيانات الدورة',
+                    builder: (_) => _CourseForm(
+                      existing: g,
+                      onSaved: (msg) {
+                        widget.onSaved(msg);
+                        _reload();
                       },
                     ),
                   ),
-                SizedBox(
-                  width: 180,
-                  child: PrimaryButton('تحديث الملف', icon: Icons.refresh, color: AppTheme.dark2, onPressed: _reload),
                 ),
-                SizedBox(
-                  width: 170,
-                  child: PrimaryButton(
-                    'حذف الدورة',
-                    icon: Icons.delete_outline,
-                    color: AppTheme.danger,
-                    onPressed: () => _deleteCourse(g),
-                  ),
-                ),
-              ],
-            ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: PrimaryButton('تحديث الملف', icon: Icons.refresh, color: AppTheme.dark2, onPressed: _reload),
+              ),
+            ]),
           ],
         );
       },
-    );
-  }
-}
-
-class _AddStudentToCoursePanel extends StatefulWidget {
-  final GroupOption group;
-  final List<CourseStudentRecord> currentStudents;
-  final void Function(String) onDone;
-  const _AddStudentToCoursePanel({required this.group, required this.currentStudents, required this.onDone});
-
-  @override
-  State<_AddStudentToCoursePanel> createState() => _AddStudentToCoursePanelState();
-}
-
-class _AddStudentToCoursePanelState extends State<_AddStudentToCoursePanel> {
-  final store = RegistrationStore.instance;
-  final TextEditingController _search = TextEditingController();
-  int? _selectedStudentId;
-  bool _saving = false;
-
-  @override
-  void dispose() {
-    _search.dispose();
-    super.dispose();
-  }
-
-  List<StudentOption> get _eligibleStudents {
-    final enrolledIds = widget.currentStudents.map((e) => e.id).toSet();
-    final q = _search.text.trim();
-    return store.students.where((student) {
-      if (enrolledIds.contains(student.id)) return false;
-      if (student.status.trim() == 'محذوف') return false;
-      if (q.isEmpty) return true;
-      return student.name.contains(q) || student.code.contains(q);
-    }).toList();
-  }
-
-  Future<void> _submit() async {
-    final studentId = _selectedStudentId;
-    if (studentId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('اختر الطالب أولًا.')));
-      return;
-    }
-    setState(() => _saving = true);
-    final result = await store.addStudentDirectlyToCourse(groupId: widget.group.id, studentId: studentId);
-    if (!mounted) return;
-    setState(() => _saving = false);
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(result.message)));
-    if (!result.ok) return;
-    widget.onDone(result.message);
-    Navigator.of(context).pop();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final eligible = _eligibleStudents;
-    final selectedExists = eligible.any((s) => s.id == _selectedStudentId);
-    final dropdownValue = selectedExists ? _selectedStudentId : (eligible.isNotEmpty ? eligible.first.id : null);
-    if (_selectedStudentId == null && eligible.isNotEmpty) {
-      _selectedStudentId = eligible.first.id;
-    } else if (!selectedExists) {
-      _selectedStudentId = dropdownValue;
-    }
-
-    return ListView(
-      padding: const EdgeInsets.all(22),
-      children: [
-        Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: (widget.group.status == 'pending' ? AppTheme.gold : AppTheme.seed).withOpacity(.08),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: (widget.group.status == 'pending' ? AppTheme.gold : AppTheme.seed).withOpacity(.28)),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(widget.group.name, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: AppTheme.dark)),
-              const SizedBox(height: 6),
-              Text(
-                'المادة: ${widget.group.subject} — المدرس: ${widget.group.teacher} — الفترة: ${RegistrationStore.instance.periodLabel(widget.group.period)}',
-                style: const TextStyle(fontSize: 12, color: AppTheme.textSub),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                widget.group.status == 'pending'
-                    ? 'هذه الدورة بانتظار الموافقة حاليًا، لذلك لن تُقبل الإضافة المباشرة قبل اعتمادها.'
-                    : 'المقاعد المتاحة الآن: ${widget.group.seatsLeft > 0 ? widget.group.seatsLeft : 0} — يمكن إضافة طالب مباشرة من هنا.',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                  color: widget.group.status == 'pending' ? AppTheme.gold : AppTheme.success,
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 16),
-        const Text('ابحث عن الطالب', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppTheme.dark)),
-        const SizedBox(height: 6),
-        TextField(
-          controller: _search,
-          decoration: fieldDeco('بالاسم أو الكود', icon: Icons.search),
-          onChanged: (_) => setState(() {}),
-        ),
-        const SizedBox(height: 14),
-        const Text('اختر الطالب', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppTheme.dark)),
-        const SizedBox(height: 6),
-        if (eligible.isEmpty)
-          Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: AppTheme.panel2,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: AppTheme.line),
-            ),
-            child: const Text(
-              'لا يوجد طلاب متاحون للإضافة المباشرة وفق التصفية الحالية، أو أن كل الطلاب مضافون أصلًا إلى هذه الدورة.',
-              style: TextStyle(fontSize: 12.5, color: AppTheme.textSub),
-            ),
-          )
-        else
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            decoration: BoxDecoration(border: Border.all(color: AppTheme.line), borderRadius: BorderRadius.circular(10)),
-            child: DropdownButtonHideUnderline(
-              child: DropdownButton<int>(
-                value: dropdownValue,
-                isExpanded: true,
-                items: eligible
-                    .map((student) => DropdownMenuItem<int>(
-                          value: student.id,
-                          child: Text('${student.name} — ${student.code}', style: const TextStyle(fontSize: 12.5)),
-                        ))
-                    .toList(),
-                onChanged: _saving ? null : (value) => setState(() => _selectedStudentId = value),
-              ),
-            ),
-          ),
-        const SizedBox(height: 16),
-        if (eligible.isNotEmpty)
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: AppTheme.panel2,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: AppTheme.line),
-            ),
-            child: Text(
-              'عند الإضافة المباشرة سيتم أيضًا تحديث الطلب المعلّق أو قائمة الانتظار لهذا الطالب إن وُجدت، ثم محاولة فتح واتساب لإشعاره بالاعتماد.',
-              style: const TextStyle(fontSize: 12, color: AppTheme.textSub),
-            ),
-          ),
-        const SizedBox(height: 18),
-        Row(
-          children: [
-            Expanded(
-              child: OutlinedButton(
-                onPressed: _saving ? null : () => Navigator.of(context).pop(),
-                child: const Text('إلغاء'),
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: PrimaryButton(
-                _saving ? 'جارٍ الإضافة...' : 'إضافة الطالب إلى الدورة',
-                icon: Icons.person_add_alt_1,
-                color: AppTheme.seed,
-                onPressed: (_saving || eligible.isEmpty || widget.group.status == 'pending') ? null : _submit,
-              ),
-            ),
-          ],
-        ),
-      ],
     );
   }
 }
@@ -1262,7 +970,7 @@ class _CourseFormState extends State<_CourseForm> {
   String? _teacher;
   String _period = 'مسائي';
   String _system = 'كورس كامل';
-  String _status = 'pending';
+  String _status = 'open';
   String? _type;
   bool _newSubject = false;
   bool _newType = false;
@@ -1288,7 +996,7 @@ class _CourseFormState extends State<_CourseForm> {
     _teacher = g == null ? null : _teacherLabel(g.teacher, g.subject);
     _period = g?.period ?? 'مسائي';
     _system = g?.system ?? 'كورس كامل';
-    _status = g?.status ?? 'pending';
+    _status = g?.status ?? 'open';
     _type = (g == null || g.type.trim().isEmpty) ? null : g.type;
     _financeLocked = g?.financeLocked ?? false;
     _installments = g == null ? 2 : (g.installments < 1 ? 1 : g.installments);
@@ -1414,29 +1122,12 @@ class _CourseFormState extends State<_CourseForm> {
         const SizedBox(height: 14),
         _label('حالة الدورة'),
         const SizedBox(height: 6),
-        if (AppSession.canApproveCourses) ...[
-          _statusDropdown(),
-          const SizedBox(height: 6),
-          Text(
-            _status == 'pending'
-                ? 'الوضع الافتراضي الآن هو: بانتظار الموافقة. هذا يعني أن الدورة ستُحفظ لكن لن تُستخدم في التسجيل حتى اعتمادها.'
-                : 'يمكنك ضبط الحالة يدويًا. الدورات المفتوحة أو الجارية فقط تظهر للتسجيل، أما المنتهية والمغلقة فتبقى محفوظة للأرشفة والمتابعة.',
-            style: const TextStyle(fontSize: 11.5, color: AppTheme.textSub),
-          ),
-        ] else
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: AppTheme.gold.withOpacity(.08),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: AppTheme.gold.withOpacity(.25)),
-            ),
-            child: const Text(
-              'أنت داخل حساب الدورات. أي دورة جديدة أو تعديل مهم سيبقى بانتظار موافقة الإدارة من لوحة القيادة قبل أن تصبح قابلة للتسجيل أو إضافة الطلاب.',
-              style: TextStyle(fontSize: 12, color: AppTheme.dark2, fontWeight: FontWeight.bold, height: 1.5),
-            ),
-          ),
+        _statusDropdown(),
+        const SizedBox(height: 6),
+        const Text(
+          'السعة تُحدد هنا عند إنشاء الدورة ويمكن تعديلها لاحقًا، كما يمكنك تحويل الدورة إلى جارية أو منتهية أو مغلقة، ومع تفعيل القفل المالي تصبح مقفلة ماليًا.',
+          style: TextStyle(fontSize: 11.5, color: AppTheme.textSub),
+        ),
         const SizedBox(height: 14),
         _label('أيام الدوام *'),
         const SizedBox(height: 6),
@@ -1465,39 +1156,24 @@ class _CourseFormState extends State<_CourseForm> {
         Row(children: [
           Expanded(child: _numberField(_room, 'القاعة', keyboardType: TextInputType.text)),
           const SizedBox(width: 10),
-          Expanded(child: _numberField(_capacity, 'عدد الطلاب / السعة')),
+          Expanded(child: _numberField(_capacity, 'السعة')),
         ]),
         const SizedBox(height: 14),
         Row(children: [
-          Expanded(child: _numberField(_sessionsDone, _system == 'نظام ساعات' ? 'الساعات المنفذة' : 'الجلسات المنفذة')),
+          Expanded(child: _numberField(_sessionsDone, 'الجلسات المنفذة')),
           const SizedBox(width: 10),
-          Expanded(child: _numberField(_sessionsTotal, _system == 'نظام ساعات' ? 'عدد الساعات المعتمدة' : 'إجمالي الجلسات')),
+          Expanded(child: _numberField(_sessionsTotal, 'إجمالي الجلسات')),
         ]),
         const SizedBox(height: 14),
         if (AppSession.canViewFinancial) ...[
           Row(children: [
             Expanded(child: _numberField(_price, _system == 'نظام ساعات' ? 'رسم الساعة' : 'رسم الدورة')),
             const SizedBox(width: 10),
-            Expanded(child: _numberField(_teacherPct, 'نسبة المدرس %')),
+            Expanded(child: _numberField(_teacherPct, 'نسبة المعلم %')),
           ]),
-          const SizedBox(height: 8),
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: AppTheme.panel2,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: AppTheme.line),
-            ),
-            child: Text(
-              _system == 'نظام ساعات'
-                  ? 'احتساب الطالب: ${_sessionsTotal.text.trim().isEmpty ? '0' : _sessionsTotal.text.trim()} ساعة × ${_price.text.trim().isEmpty ? '0' : _price.text.trim()} = ${money((_toDouble(_sessionsTotal.text) * _toDouble(_price.text)).round())}'
-                  : 'قيمة القسط الحالية: ${money((_toDouble(_price.text) / (_installments <= 0 ? 1 : _installments)).round())} — عدد الأقساط: ${_installments == 1 ? 'كامل الرسم' : '$_installments أقساط'}',
-              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppTheme.dark2),
-            ),
-          ),
           if (_system != 'نظام ساعات') ...[
             const SizedBox(height: 14),
-            _label('عدد الأقساط / طريقة تحصيل رسم الدورة'),
+            _label('طريقة تحصيل رسم الدورة'),
             const SizedBox(height: 6),
             Wrap(
               spacing: 8,
@@ -1566,25 +1242,22 @@ class _CourseFormState extends State<_CourseForm> {
         ),
       );
 
-  double _toDouble(String value) => double.tryParse(value.trim().replaceAll(',', '.')) ?? 0.0;
-
   Widget _statusDropdown() {
-    const items = ['pending', 'open', 'running', 'completed', 'closed'];
+    const items = ['open', 'running', 'completed', 'closed'];
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12),
       decoration: BoxDecoration(border: Border.all(color: AppTheme.line), borderRadius: BorderRadius.circular(10)),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String>(
-          value: items.contains(_status) ? _status : 'pending',
+          value: items.contains(_status) ? _status : 'open',
           isExpanded: true,
           items: const [
-            DropdownMenuItem(value: 'pending', child: Text('بانتظار الموافقة', style: TextStyle(fontSize: 12.5))),
             DropdownMenuItem(value: 'open', child: Text('مفتوحة للتسجيل', style: TextStyle(fontSize: 12.5))),
             DropdownMenuItem(value: 'running', child: Text('جارية', style: TextStyle(fontSize: 12.5))),
             DropdownMenuItem(value: 'completed', child: Text('منتهية', style: TextStyle(fontSize: 12.5))),
             DropdownMenuItem(value: 'closed', child: Text('مغلقة', style: TextStyle(fontSize: 12.5))),
           ],
-          onChanged: (v) => setState(() => _status = v ?? 'pending'),
+          onChanged: (v) => setState(() => _status = v ?? 'open'),
         ),
       ),
     );
@@ -1596,7 +1269,6 @@ class _CourseFormState extends State<_CourseForm> {
         controller: controller,
         keyboardType: keyboardType,
         decoration: _dec(label),
-        onChanged: (_) => setState(() {}),
       );
 
   List<String> _subjectOptions() {
@@ -1681,7 +1353,7 @@ class _CourseFormState extends State<_CourseForm> {
       capacity: int.tryParse(_capacity.text) ?? 12,
       enrolledCount: widget.existing?.enrolled ?? 0,
       waitingCount: widget.existing?.waiting ?? 0,
-      status: AppSession.canApproveCourses ? _status : (widget.existing?.status ?? 'pending'),
+      status: _status,
       type: type,
       sessionsDone: int.tryParse(_sessionsDone.text) ?? 0,
       sessionsTotal: int.tryParse(_sessionsTotal.text) ?? 12,

@@ -11,7 +11,6 @@ class AppTheme {
   static const Color danger = Color(0xFFB91C1C);
   static const Color purple = Color(0xFF7C3AED);
   static const Color surface = Color(0xFFF6F8FB);
-  static const Color panel2 = Color(0xFFF8FAFC);
   static const Color line = Color(0xFFE2E8F0);
   static const Color textSub = Color(0xFF64748B);
 

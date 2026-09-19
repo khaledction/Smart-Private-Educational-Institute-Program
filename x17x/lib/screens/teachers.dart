@@ -232,13 +232,11 @@ class _TeachersScreenState extends State<TeachersScreen> {
 }
 
 class _TeacherVm {
-  final int id;
   final String name;
   final String subject;
   final String degree;
   final String mobile;
   final String whatsapp;
-  final String nationalId;
   final bool worksGov;
   final bool worksOther;
   final double mgmtRating;
@@ -248,13 +246,11 @@ class _TeacherVm {
   final int waiting;
 
   const _TeacherVm({
-    required this.id,
     required this.name,
     required this.subject,
     required this.degree,
     required this.mobile,
     required this.whatsapp,
-    required this.nationalId,
     required this.worksGov,
     required this.worksOther,
     required this.mgmtRating,
@@ -271,13 +267,11 @@ class _TeacherVm {
     final waitingRows = store.waiting.where((w) => w.teacherName.trim() == option.name.trim()).toList();
     final source = teacherByName(option.name);
     return _TeacherVm(
-      id: option.id,
       name: option.name,
       subject: option.specialization,
       degree: option.degree.trim().isEmpty ? (source?.degree ?? '—') : option.degree,
       mobile: option.mobile.trim().isNotEmpty ? option.mobile.trim() : (source?.mobile.isNotEmpty == true ? source!.mobile : '—'),
       whatsapp: option.whatsapp.trim().isNotEmpty ? option.whatsapp.trim() : (source?.whatsapp.isNotEmpty == true ? source!.whatsapp : '—'),
-      nationalId: source?.nationalId ?? '',
       worksGov: source?.worksGov ?? false,
       worksOther: source?.worksOther ?? false,
       mgmtRating: source?.mgmtRating ?? 4.0,
@@ -425,50 +419,6 @@ class _TeacherCard extends StatelessWidget {
               ]),
             ),
           ),
-        const SizedBox(height: 8),
-        Row(children: [
-          Expanded(
-            child: TextButton.icon(
-              onPressed: () => showSidePanel(
-                context,
-                title: 'تعديل بيانات المدرس',
-                builder: (_) => _NewTeacherForm(existing: t, onSaved: () => RegistrationStore.instance.refresh()),
-              ),
-              icon: const Icon(Icons.edit_outlined, size: 16),
-              label: const Text('تعديل', style: TextStyle(fontSize: 12)),
-            ),
-          ),
-          Expanded(
-            child: TextButton.icon(
-              onPressed: () async {
-                final ok = await showDialog<bool>(
-                      context: context,
-                      builder: (context) => AlertDialog(
-                        title: const Text('حذف المدرس'),
-                        content: Text('سيُحذف المدرس ${t.name} إذا لم يكن مرتبطًا بدورات أو طلبات أو انتظار. هل تريد المتابعة؟'),
-                        actions: [
-                          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('إلغاء')),
-                          FilledButton(
-                            onPressed: () => Navigator.pop(context, true),
-                            style: FilledButton.styleFrom(backgroundColor: AppTheme.danger),
-                            child: const Text('نعم، احذف'),
-                          ),
-                        ],
-                      ),
-                    ) ??
-                    false;
-                if (!ok || !context.mounted) return;
-                final result = await RegistrationStore.instance.deleteTeacher(t.id);
-                if (!context.mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text(result.message), behavior: SnackBarBehavior.floating),
-                );
-              },
-              icon: const Icon(Icons.delete_outline, size: 16, color: AppTheme.danger),
-              label: const Text('حذف', style: TextStyle(fontSize: 12, color: AppTheme.danger)),
-            ),
-          ),
-        ]),
         const Divider(height: 14),
         Row(children: [
           Expanded(
@@ -510,9 +460,8 @@ class _TeacherCard extends StatelessWidget {
 }
 
 class _NewTeacherForm extends StatefulWidget {
-  final _TeacherVm? existing;
   final VoidCallback onSaved;
-  const _NewTeacherForm({this.existing, required this.onSaved});
+  const _NewTeacherForm({required this.onSaved});
 
   @override
   State<_NewTeacherForm> createState() => _NewTeacherFormState();
@@ -548,23 +497,6 @@ class _NewTeacherFormState extends State<_NewTeacherForm> {
   ];
 
   @override
-  void initState() {
-    super.initState();
-    final e = widget.existing;
-    if (e != null) {
-      _name.text = e.name;
-      _mobile.text = e.mobile == '—' ? '' : e.mobile;
-      _whatsapp.text = e.whatsapp == '—' ? '' : e.whatsapp;
-      _nationalId.text = e.nationalId;
-      _specialization = e.subject;
-      _degree = e.degree == '—' ? null : e.degree;
-      _worksGov = e.worksGov;
-      _worksOther = e.worksOther;
-      _mgmtRating = e.mgmtRating;
-    }
-  }
-
-  @override
   void dispose() {
     _name.dispose();
     _mobile.dispose();
@@ -597,16 +529,11 @@ class _NewTeacherFormState extends State<_NewTeacherForm> {
     });
 
     final result = await store.saveTeacher(
-      teacherId: widget.existing?.id,
       name: name,
       specialization: spec,
       degree: _degree!,
       mobile: mobile,
       whatsapp: whatsapp,
-      nationalId: _nationalId.text.trim(),
-      worksGov: _worksGov,
-      worksOther: _worksOther,
-      mgmtRating: _mgmtRating,
     );
     if (!mounted) return;
 
@@ -619,6 +546,30 @@ class _NewTeacherFormState extends State<_NewTeacherForm> {
     }
 
     addSubjectIfNew(spec);
+    if (teacherByName(name) == null) {
+      kTeachers.add(
+        Teacher(
+          name,
+          spec,
+          0,
+          0,
+          12,
+          0,
+          _mgmtRating,
+          'لكل جلسة',
+          0,
+          0,
+          0,
+          degree: _degree!,
+          mobile: mobile,
+          whatsapp: whatsapp,
+          nationalId: _nationalId.text.trim(),
+          worksGov: _worksGov,
+          worksOther: _worksOther,
+          mgmtRating: _mgmtRating,
+        ),
+      );
+    }
 
     final messenger = ScaffoldMessenger.of(context);
     widget.onSaved();
@@ -720,9 +671,7 @@ class _NewTeacherFormState extends State<_NewTeacherForm> {
           child: Text(_msg, style: const TextStyle(color: AppTheme.danger, fontWeight: FontWeight.bold)),
         ),
       PrimaryButton(
-        _saving
-            ? (widget.existing == null ? 'جارٍ حفظ المدرس...' : 'جارٍ تعديل المدرس...')
-            : (widget.existing == null ? 'حفظ المدرس وإضافته لقوائم الاختيار' : 'حفظ تعديلات المدرس'),
+        _saving ? 'جارٍ حفظ المدرس...' : 'حفظ المدرس وإضافته لقوائم الاختيار',
         icon: Icons.save,
         onPressed: _saving ? null : _save,
       ),

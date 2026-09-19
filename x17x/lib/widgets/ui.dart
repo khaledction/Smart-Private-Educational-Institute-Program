@@ -15,27 +15,6 @@ String fmt(num v) {
 
 String money(num v) => '${fmt(v)} ل.س';
 
-InputDecoration fieldDeco(String hint, {IconData? icon, Widget? suffixIcon}) => InputDecoration(
-      hintText: hint,
-      prefixIcon: icon == null ? null : Icon(icon),
-      suffixIcon: suffixIcon,
-      isDense: true,
-      filled: true,
-      fillColor: AppTheme.surface,
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: AppTheme.line),
-      ),
-      enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: AppTheme.line),
-      ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: AppTheme.seed),
-      ),
-    );
-
 /// زخرفة البطاقة الموحدة
 BoxDecoration cardDeco() => BoxDecoration(
       color: Colors.white,
@@ -383,7 +362,7 @@ void showSidePanel(BuildContext context,
     barrierLabel: 'إغلاق اللوحة',
     barrierColor: Colors.black38,
     transitionDuration: const Duration(milliseconds: 280),
-    pageBuilder: (dialogContext, __, ___) => Align(
+    pageBuilder: (_, __, ___) => Align(
       alignment: AlignmentDirectional.centerEnd,
       child: Material(
         color: Colors.white,
@@ -400,7 +379,7 @@ void showSidePanel(BuildContext context,
                 const Spacer(),
                 InkWell(
                   borderRadius: BorderRadius.circular(8),
-                  onTap: () => Navigator.of(dialogContext).pop(),
+                  onTap: () => Navigator.pop(context),
                   child: const Padding(
                     padding: EdgeInsets.all(4),
                     child: Icon(Icons.close, size: 20, color: Color(0xFF94A3B8)),
@@ -408,7 +387,7 @@ void showSidePanel(BuildContext context,
                 ),
               ]),
             ),
-            Expanded(child: builder(dialogContext)),
+            Expanded(child: builder(context)),
           ]),
         ),
       ),

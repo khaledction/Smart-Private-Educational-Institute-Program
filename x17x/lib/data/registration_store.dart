@@ -111,8 +111,6 @@ class GroupOption {
   bool get isHoursSystem => system == 'نظام ساعات';
   int get executedSessions => sessionsDone < 0 ? 0 : (sessionsDone > sessionsTotal ? sessionsTotal : sessionsDone);
   double get sessionUnitPrice => isHoursSystem ? price : (sessionsTotal == 0 ? 0.0 : price / sessionsTotal);
-  double get installmentAmount => isHoursSystem ? price : (installments <= 1 ? price : price / installments);
-  double get studentTotalPlannedFee => isHoursSystem ? price * sessionsTotal : price;
   double get revenue => isHoursSystem ? price * sessionsTotal * enrolled : price * enrolled;
   double get accruedRevenue => sessionUnitPrice * executedSessions * enrolled;
   double get accruedTeacherComp => teacherPct <= 0 ? 0.0 : accruedRevenue * teacherPct / 100;
@@ -450,16 +448,11 @@ class RegistrationStore extends ChangeNotifier {
   }
 
   Future<ActionResult> saveTeacher({
-    int? teacherId,
     required String name,
     required String specialization,
     required String degree,
     required String mobile,
     required String whatsapp,
-    String nationalId = '',
-    bool worksGov = false,
-    bool worksOther = false,
-    double mgmtRating = 3,
   }) async {
     try {
       _setBusy(true);
@@ -469,22 +462,16 @@ class RegistrationStore extends ChangeNotifier {
       final normalizedDegree = degree.trim().isEmpty ? '—' : degree.trim();
       final normalizedMobile = mobile.trim();
       final normalizedWhatsapp = whatsapp.trim().isEmpty ? normalizedMobile : whatsapp.trim();
-      final normalizedNationalId = nationalId.trim();
 
       if (normalizedName.isEmpty || normalizedSpec.isEmpty || normalizedMobile.isEmpty) {
         return const ActionResult(false, 'أكمل الاسم والاختصاص والموبايل قبل حفظ المدرس.');
       }
 
-      final oldRows = teacherId == null
-          ? const <Map<String, Object?>>[]
-          : await db.query('teachers', where: 'id = ?', whereArgs: [teacherId], limit: 1);
-      final oldName = oldRows.isEmpty ? null : oldRows.first['full_name'] as String?;
-
       final duplicate = await db.query(
         'teachers',
         columns: ['id'],
-        where: teacherId == null ? 'full_name = ?' : 'full_name = ? AND id != ?',
-        whereArgs: teacherId == null ? [normalizedName] : [normalizedName, teacherId],
+        where: 'full_name = ?',
+        whereArgs: [normalizedName],
         limit: 1,
       );
       if (duplicate.isNotEmpty) {
@@ -492,166 +479,23 @@ class RegistrationStore extends ChangeNotifier {
       }
 
       await _ensureSubject(db, normalizedSpec);
-      final payload = {
-        'full_name': normalizedName,
-        'specialization': normalizedSpec,
-        'degree': normalizedDegree,
-        'mobile': normalizedMobile,
-        'whatsapp': normalizedWhatsapp,
-      };
-
-      int id;
-      if (teacherId == null) {
-        id = await db.insert('teachers', payload, conflictAlgorithm: ConflictAlgorithm.ignore);
-        await _log(db, 'teacher.create', 'teacher', id, 'تم إنشاء مدرس جديد وحفظه في قاعدة البيانات المحلية.');
-      } else {
-        await db.update('teachers', payload, where: 'id = ?', whereArgs: [teacherId]);
-        id = teacherId;
-        await _log(db, 'teacher.update', 'teacher', id, 'تم تعديل بيانات المدرس في قاعدة البيانات المحلية.');
-      }
-
-      _upsertRuntimeTeacher(
-        oldName: oldName,
-        name: normalizedName,
-        specialization: normalizedSpec,
-        degree: normalizedDegree,
-        mobile: normalizedMobile,
-        whatsapp: normalizedWhatsapp,
-        nationalId: normalizedNationalId,
-        worksGov: worksGov,
-        worksOther: worksOther,
-        mgmtRating: mgmtRating,
+      final id = await db.insert(
+        'teachers',
+        {
+          'full_name': normalizedName,
+          'specialization': normalizedSpec,
+          'degree': normalizedDegree,
+          'mobile': normalizedMobile,
+          'whatsapp': normalizedWhatsapp,
+        },
+        conflictAlgorithm: ConflictAlgorithm.ignore,
       );
+      await _log(db, 'teacher.create', 'teacher', id, 'تم إنشاء مدرس جديد وحفظه في قاعدة البيانات المحلية.');
 
       await refresh();
-      return ActionResult(
-        true,
-        teacherId == null
-            ? '✅ تم حفظ المدرس في قاعدة البيانات المحلية.'
-            : '✅ تم تعديل بيانات المدرس وحفظها في قاعدة البيانات المحلية.',
-      );
+      return const ActionResult(true, '✅ تم حفظ المدرس في قاعدة البيانات المحلية.');
     } catch (e) {
       return ActionResult(false, 'تعذر حفظ المدرس: $e');
-    } finally {
-      _setBusy(false);
-    }
-  }
-
-  Future<ActionResult> deleteTeacher(int teacherId) async {
-    try {
-      _setBusy(true);
-      final db = await _db.database;
-      final rows = await db.query('teachers', where: 'id = ?', whereArgs: [teacherId], limit: 1);
-      if (rows.isEmpty) {
-        return const ActionResult(false, 'المدرس غير موجود.');
-      }
-      final teacherName = rows.first['full_name'] as String? ?? 'المدرس';
-
-      final groupCountRows = await db.rawQuery('SELECT COUNT(*) AS c FROM groups_local WHERE teacher_id = ?', [teacherId]);
-      final requestCountRows = await db.rawQuery('SELECT COUNT(*) AS c FROM registration_requests_local WHERE teacher_id = ?', [teacherId]);
-      final waitingCountRows = await db.rawQuery('SELECT COUNT(*) AS c FROM waiting_lists_local WHERE teacher_id = ?', [teacherId]);
-      final groupCount = (groupCountRows.first['c'] as num?)?.toInt() ?? 0;
-      final requestCount = (requestCountRows.first['c'] as num?)?.toInt() ?? 0;
-      final waitingCount = (waitingCountRows.first['c'] as num?)?.toInt() ?? 0;
-
-      if (groupCount > 0 || requestCount > 0 || waitingCount > 0) {
-        return ActionResult(
-          false,
-          'لا يمكن حذف $teacherName الآن لأنه مرتبط بـ $groupCount دورة و$requestCount طلب و$waitingCount سجل انتظار. انقل أو احذف الارتباطات أولًا.',
-        );
-      }
-
-      await db.delete('teachers', where: 'id = ?', whereArgs: [teacherId]);
-      _removeRuntimeTeacher(teacherName);
-      await _log(db, 'teacher.delete', 'teacher', teacherId, 'تم حذف المدرس $teacherName من قاعدة البيانات المحلية.');
-      await refresh();
-      return ActionResult(true, '✅ تم حذف المدرس $teacherName من قاعدة البيانات المحلية.');
-    } catch (e) {
-      return ActionResult(false, 'تعذر حذف المدرس: $e');
-    } finally {
-      _setBusy(false);
-    }
-  }
-
-  Future<ActionResult> approveGroup(int groupId) {
-    return setGroupStatus(groupId, 'open', note: 'تم اعتماد الدورة وفتحها للتسجيل.');
-  }
-
-  Future<ActionResult> setGroupStatus(int groupId, String status, {String? note}) async {
-    try {
-      _setBusy(true);
-      final db = await _db.database;
-      final group = await _groupByIdFromDb(db, groupId);
-      if (group == null) {
-        return const ActionResult(false, 'الدورة المحددة غير موجودة.');
-      }
-
-      await db.update(
-        'groups_local',
-        {'status': status},
-        where: 'id = ?',
-        whereArgs: [groupId],
-      );
-
-      final updated = await _groupByIdFromDb(db, groupId);
-      if (updated == null) {
-        await refresh();
-        return const ActionResult(true, '✅ تم تحديث حالة الدورة.');
-      }
-
-      var message = note ?? '✅ تم تحديث حالة الدورة بنجاح.';
-      if (updated.isOpenForRegistration) {
-        message += await _fillVacanciesFromWaiting(db, groupId, reason: 'بعد اعتماد/فتح دورة جديدة');
-        message += await _notifyPendingRequestsForAvailableGroup(db, updated);
-      }
-
-      await _log(db, 'group.status', 'group', groupId, 'تم تحويل حالة الدورة ${group.name} إلى $status.');
-      await refresh();
-      return ActionResult(true, message);
-    } catch (e) {
-      return ActionResult(false, 'تعذر تحديث حالة الدورة: $e');
-    } finally {
-      _setBusy(false);
-    }
-  }
-
-  Future<ActionResult> deleteGroup(int groupId) async {
-    try {
-      _setBusy(true);
-      final db = await _db.database;
-      final group = await _groupByIdFromDb(db, groupId);
-      if (group == null) {
-        return const ActionResult(false, 'الدورة المحددة غير موجودة.');
-      }
-
-      final enrollmentRows = await db.rawQuery(
-        'SELECT COUNT(*) AS c FROM enrollments_local WHERE group_id = ?',
-        [groupId],
-      );
-      final waitingRows = await db.rawQuery(
-        'SELECT COUNT(*) AS c FROM waiting_lists_local WHERE group_id = ?',
-        [groupId],
-      );
-      final requestRows = await db.rawQuery(
-        'SELECT COUNT(*) AS c FROM registration_requests_local WHERE target_group_id = ? AND status IN (?, ?, ?)',
-        [groupId, 'معلق', 'معتمد', 'قائمة انتظار'],
-      );
-      final enrollments = ((enrollmentRows.first['c'] as num?) ?? 0).toInt();
-      final waiting = ((waitingRows.first['c'] as num?) ?? 0).toInt();
-      final requests = ((requestRows.first['c'] as num?) ?? 0).toInt();
-      if (enrollments > 0 || waiting > 0 || requests > 0) {
-        return ActionResult(
-          false,
-          'لا يمكن حذف الدورة الآن لوجود ارتباطات عليها: $enrollments تسجيلات، $waiting انتظار، $requests طلبات مرتبطة.',
-        );
-      }
-
-      await db.delete('groups_local', where: 'id = ?', whereArgs: [groupId]);
-      await _log(db, 'group.delete', 'group', groupId, 'تم حذف الدورة ${group.name} من القاعدة المحلية.');
-      await refresh();
-      return ActionResult(true, '✅ تم حذف الدورة ${group.name} بنجاح.');
-    } catch (e) {
-      return ActionResult(false, 'تعذر حذف الدورة: $e');
     } finally {
       _setBusy(false);
     }
@@ -727,9 +571,8 @@ class RegistrationStore extends ChangeNotifier {
         'finance_locked': financeLocked ? 1 : 0,
       };
 
-      final isNewGroup = groupId == null;
       int savedId;
-      if (isNewGroup) {
+      if (groupId == null) {
         savedId = await db.insert('groups_local', payload);
         await _log(db, 'group.create', 'group', savedId, 'تم إنشاء دورة جديدة وحفظها في قاعدة البيانات المحلية.');
       } else {
@@ -738,17 +581,11 @@ class RegistrationStore extends ChangeNotifier {
         await _log(db, 'group.update', 'group', savedId, 'تم تعديل بيانات دورة محفوظة محليًا.');
       }
 
-      final savedGroup = await _groupByIdFromDb(db, savedId);
-      final waitingMessage = (savedGroup != null && savedGroup.isOpenForRegistration)
-          ? await _fillVacanciesFromWaiting(db, savedId)
-          : '';
-      final pendingNoticeMessage = (savedGroup != null && (isNewGroup || savedGroup.isOpenForRegistration))
-          ? await _notifyPendingRequestsForAvailableGroup(db, savedGroup, createdNow: isNewGroup)
-          : '';
+      final waitingMessage = await _fillVacanciesFromWaiting(db, savedId);
       await refresh();
       return ActionResult(
         true,
-        (isNewGroup ? '✅ تم حفظ الدورة الجديدة في القاعدة المحلية.' : '✅ تم تحديث الدورة وحفظ التعديلات.') + waitingMessage + pendingNoticeMessage,
+        (groupId == null ? '✅ تم حفظ الدورة الجديدة في القاعدة المحلية.' : '✅ تم تحديث الدورة وحفظ التعديلات.') + waitingMessage,
       );
     } catch (e) {
       return ActionResult(false, 'تعذر حفظ الدورة: $e');
@@ -1210,7 +1047,6 @@ class RegistrationStore extends ChangeNotifier {
   Future<ActionResult> removeStudentFromCourse({
     required int groupId,
     required int studentId,
-    bool keepSeatReserved = false,
   }) async {
     try {
       _setBusy(true);
@@ -1250,19 +1086,15 @@ class RegistrationStore extends ChangeNotifier {
         where: 'student_id = ? AND subject = ? AND teacher = ? AND period = ? AND schedule = ?',
         whereArgs: [studentId, group.subject, group.teacher, group.period, group.days],
       );
-      if (!keepSeatReserved) {
-        await db.rawUpdate(
-          'UPDATE groups_local SET enrolled_count = CASE WHEN enrolled_count > 0 THEN enrolled_count - 1 ELSE 0 END WHERE id = ?',
-          [groupId],
-        );
-      }
+      await db.rawUpdate(
+        'UPDATE groups_local SET enrolled_count = CASE WHEN enrolled_count > 0 THEN enrolled_count - 1 ELSE 0 END WHERE id = ?',
+        [groupId],
+      );
       await db.update(
         'registration_requests_local',
         {
           'status': 'منسحب',
-          'decision_note': keepSeatReserved
-              ? 'انسحب الطالب من الدورة وتم حذف اسمه منها مع إبقاء مقعده محجوزًا كي لا يُضاف أحد بدلًا منه.'
-              : 'انسحب الطالب من الدورة وتم حذف اسمه منها وتحرير مقعده.',
+          'decision_note': 'انسحب الطالب من الدورة وتم حذف اسمه منها وتحرير مقعده.',
           'decided_at': DateTime.now().toIso8601String(),
         },
         where: 'student_id = ? AND target_group_id = ? AND status = ?',
@@ -1270,23 +1102,13 @@ class RegistrationStore extends ChangeNotifier {
       );
 
       await _refreshStudentAcademicState(db, studentId);
-      final waitingMessage = keepSeatReserved ? '' : await _fillVacanciesFromWaiting(db, groupId, reason: 'بعد انسحاب طالب من الدورة');
-      await _log(
-        db,
-        'course.withdraw',
-        'group',
-        groupId,
-        keepSeatReserved
-            ? 'تم حذف $studentName من الدورة ${group.name} مع إبقاء المقعد محجوزًا.'
-            : 'تم حذف $studentName من الدورة ${group.name} وتحرير المقعد.',
-      );
+      final waitingMessage = await _fillVacanciesFromWaiting(db, groupId, reason: 'بعد انسحاب طالب من الدورة');
+      await _log(db, 'course.withdraw', 'group', groupId, 'تم حذف $studentName من الدورة ${group.name} وتحرير المقعد.');
       kNotifications.insert(
         0,
         NotificationItem(
           'انسحاب من دورة',
-          keepSeatReserved
-              ? 'تم حذف $studentName من ${group.name} مع إبقاء المقعد محجوزًا دون إضافة بديل.'
-              : 'تم حذف $studentName من ${group.name}.${waitingMessage.isEmpty ? '' : ' كما تم تعويض المقعد تلقائيًا من قائمة الانتظار.'}',
+          'تم حذف $studentName من ${group.name}.${waitingMessage.isEmpty ? '' : ' كما تم تعويض المقعد تلقائيًا من قائمة الانتظار.'}',
           'الآن',
           'waiting',
         ),
@@ -1294,144 +1116,9 @@ class RegistrationStore extends ChangeNotifier {
 
       await refresh();
       await _syncStudentsIfReady();
-      return ActionResult(
-        true,
-        keepSeatReserved
-            ? '✅ تم حذف $studentName من الدورة مع إبقاء المقعد محجوزًا، ويمكنك لاحقًا اختيار من تضيفه يدويًا.'
-            : '✅ تم حذف $studentName من الدورة وتحرير المقعد.$waitingMessage',
-      );
+      return ActionResult(true, '✅ تم حذف $studentName من الدورة وتحرير المقعد.$waitingMessage');
     } catch (e) {
       return ActionResult(false, 'تعذر حذف الطالب من الدورة: $e');
-    } finally {
-      _setBusy(false);
-    }
-  }
-
-  Future<ActionResult> addStudentDirectlyToCourse({
-    required int groupId,
-    required int studentId,
-  }) async {
-    try {
-      _setBusy(true);
-      final db = await _db.database;
-      final group = await _groupByIdFromDb(db, groupId);
-      if (group == null) {
-        return const ActionResult(false, 'الدورة المحددة غير موجودة.');
-      }
-      if (!group.isOpenForRegistration) {
-        return const ActionResult(false, 'لا يمكن إضافة طالب الآن لأن الدورة ليست مفتوحة للتسجيل.');
-      }
-      if (group.isFull) {
-        return const ActionResult(false, 'لا يمكن إضافة طالب لأن الدورة مكتملة حاليًا.');
-      }
-
-      final existingEnrollment = await db.query(
-        'enrollments_local',
-        columns: ['id'],
-        where: 'student_id = ? AND group_id = ?',
-        whereArgs: [studentId, groupId],
-        limit: 1,
-      );
-      if (existingEnrollment.isNotEmpty) {
-        return const ActionResult(false, 'هذا الطالب مضاف أصلًا إلى هذه الدورة.');
-      }
-
-      final subjectId = await _ensureSubject(db, group.subject);
-      final teacherId = await _ensureTeacher(db, name: group.teacher, subject: group.subject);
-      final student = studentById(studentId);
-      final studentName = student?.name ?? 'الطالب';
-
-      await _enrollStudentInGroup(db, studentId: studentId, group: group);
-
-      final waitingRows = await db.rawQuery(
-        '''
-        SELECT w.id, w.group_id
-        FROM waiting_lists_local w
-        WHERE w.student_id = ? AND w.subject_id = ? AND w.teacher_id = ?
-        ORDER BY CASE WHEN w.group_id = ? THEN 0 WHEN w.period = ? THEN 1 ELSE 2 END, w.created_at ASC, w.id ASC
-        LIMIT 1
-        ''',
-        [studentId, subjectId, teacherId, groupId, group.period],
-      );
-      if (waitingRows.isNotEmpty) {
-        final waitingId = waitingRows.first['id'] as int;
-        final linkedGroupId = (waitingRows.first['group_id'] as num?)?.toInt();
-        await db.delete('waiting_lists_local', where: 'id = ?', whereArgs: [waitingId]);
-        if (linkedGroupId != null) {
-          await db.rawUpdate(
-            'UPDATE groups_local SET waiting_count = CASE WHEN waiting_count > 0 THEN waiting_count - 1 ELSE 0 END WHERE id = ?',
-            [linkedGroupId],
-          );
-        }
-      }
-
-      final matchingRequests = await db.query(
-        'registration_requests_local',
-        columns: ['id'],
-        where: 'student_id = ? AND subject_id = ? AND teacher_id = ? AND status IN (?, ?, ?)',
-        whereArgs: [studentId, subjectId, teacherId, 'معلق', 'قائمة انتظار', 'مرفوض'],
-        orderBy: 'id DESC',
-        limit: 1,
-      );
-      if (matchingRequests.isNotEmpty) {
-        await db.update(
-          'registration_requests_local',
-          {
-            'status': 'معتمد',
-            'target_group_id': group.id,
-            'decision_note': 'تمت إضافة الطالب مباشرة من ملف الدورة.',
-            'decided_at': DateTime.now().toIso8601String(),
-          },
-          where: 'id = ?',
-          whereArgs: [matchingRequests.first['id']],
-        );
-      } else {
-        await db.insert(
-          'registration_requests_local',
-          {
-            'student_id': studentId,
-            'subject_id': subjectId,
-            'teacher_id': teacherId,
-            'period': group.period,
-            'target_group_id': group.id,
-            'status': 'معتمد',
-            'decision_note': 'تمت إضافة الطالب مباشرة من ملف الدورة.',
-            'created_at': DateTime.now().toIso8601String(),
-            'decided_at': DateTime.now().toIso8601String(),
-          },
-        );
-      }
-
-      final whatsappOpened = await _notifyStudentOnWhatsApp(
-        db,
-        studentId: studentId,
-        message: _approvalWhatsAppText(
-          studentName: studentName,
-          group: group,
-          fromWaiting: false,
-        ),
-      );
-
-      await _log(db, 'course.direct_enroll', 'group', groupId, 'تمت إضافة $studentName مباشرة إلى الدورة ${group.name}.');
-      kNotifications.insert(
-        0,
-        NotificationItem(
-          'إضافة مباشرة إلى دورة',
-          'تمت إضافة $studentName مباشرة إلى ${group.name}${whatsappOpened ? ' وتم فتح واتساب لإشعاره.' : ''}',
-          'الآن',
-          'request',
-        ),
-      );
-
-      await refresh();
-      await _syncStudentsIfReady();
-      return ActionResult(
-        true,
-        '✅ تمت إضافة $studentName إلى الدورة مباشرة${whatsappOpened ? '، وتم فتح رسالة واتساب له.' : '.'}',
-        status: 'معتمد',
-      );
-    } catch (e) {
-      return ActionResult(false, 'تعذر إضافة الطالب إلى الدورة: $e');
     } finally {
       _setBusy(false);
     }
@@ -1648,42 +1335,16 @@ class RegistrationStore extends ChangeNotifier {
 
       final waitingRows = await db.rawQuery(
         '''
-        SELECT
-          w.*, 
-          linked.id AS linked_group_id,
-          linked.status AS linked_group_status,
-          linked.capacity AS linked_group_capacity,
-          linked.enrolled_count AS linked_group_enrolled,
-          linked.finance_locked AS linked_group_finance_locked
+        SELECT w.*
         FROM waiting_lists_local w
         JOIN subjects s ON s.id = w.subject_id
         JOIN teachers t ON t.id = w.teacher_id
-        LEFT JOIN groups_local linked ON linked.id = w.group_id
-        WHERE
-          w.group_id = ?
-          OR (
-            s.name = ?
-            AND t.full_name = ?
-            AND w.period = ?
-            AND (w.group_id IS NULL OR linked.id IS NULL OR linked.status NOT IN ('open', 'running') OR linked.finance_locked = 1 OR linked.enrolled_count >= linked.capacity)
-          )
-          OR (
-            s.name = ?
-            AND t.full_name = ?
-            AND w.period != ?
-            AND (w.group_id IS NULL OR linked.id IS NULL OR linked.status NOT IN ('open', 'running') OR linked.finance_locked = 1 OR linked.enrolled_count >= linked.capacity)
-          )
-        ORDER BY
-          CASE
-            WHEN w.group_id = ? THEN 0
-            WHEN w.period = ? THEN 1
-            ELSE 2
-          END,
-          w.created_at ASC,
-          w.id ASC
+        WHERE w.group_id = ?
+           OR (w.group_id IS NULL AND s.name = ? AND t.full_name = ? AND w.period = ?)
+        ORDER BY CASE WHEN w.group_id = ? THEN 0 ELSE 1 END, w.created_at ASC, w.id ASC
         LIMIT 1
         ''',
-        [groupId, group.subject, group.teacher, group.period, group.subject, group.teacher, group.period, groupId, group.period],
+        [groupId, group.subject, group.teacher, group.period, groupId],
       );
       if (waitingRows.isEmpty) {
         break;
@@ -1695,29 +1356,21 @@ class RegistrationStore extends ChangeNotifier {
       final subjectId = waitingRow['subject_id'] as int;
       final teacherId = waitingRow['teacher_id'] as int;
       final period = waitingRow['period'] as String? ?? group.period;
-      final linkedGroupId = (waitingRow['linked_group_id'] as num?)?.toInt();
-      final movedToSamePeriod = period == group.period;
 
       await _enrollStudentInGroup(db, studentId: studentId, group: group);
       await db.delete('waiting_lists_local', where: 'id = ?', whereArgs: [waitingId]);
-      if (linkedGroupId != null) {
-        await db.rawUpdate(
-          'UPDATE groups_local SET waiting_count = CASE WHEN waiting_count > 0 THEN waiting_count - 1 ELSE 0 END WHERE id = ?',
-          [linkedGroupId],
-        );
-      }
+      await db.rawUpdate(
+        'UPDATE groups_local SET waiting_count = CASE WHEN waiting_count > 0 THEN waiting_count - 1 ELSE 0 END WHERE id = ?',
+        [groupId],
+      );
       await db.update(
         'registration_requests_local',
         {
           'status': 'معتمد',
           'target_group_id': group.id,
           'decision_note': reason == null
-              ? (movedToSamePeriod
-                  ? 'تمت إضافة الطالب تلقائيًا من قائمة الانتظار إلى دورة متاحة مع نفس المادة والمدرس بعد توفر مقعد.'
-                  : 'تمت إضافة الطالب تلقائيًا من قائمة الانتظار إلى دورة متاحة مع نفس المادة والمدرس، مع تغيير الفترة لعدم توفر مقعد في الفترة المطلوبة.')
-              : (movedToSamePeriod
-                  ? 'تمت إضافة الطالب تلقائيًا من قائمة الانتظار إلى دورة متاحة مع نفس المادة والمدرس بعد توفر مقعد ($reason).'
-                  : 'تمت إضافة الطالب تلقائيًا من قائمة الانتظار إلى دورة متاحة مع نفس المادة والمدرس، مع تغيير الفترة لعدم توفر مقعد في الفترة المطلوبة ($reason).'),
+              ? 'تمت إضافة الطالب تلقائيًا من قائمة الانتظار إلى الدورة التي رغب فيها بعد توفر مقعد.'
+              : 'تمت إضافة الطالب تلقائيًا من قائمة الانتظار إلى الدورة التي رغب فيها بعد توفر مقعد ($reason).',
           'decided_at': DateTime.now().toIso8601String(),
         },
         where: 'student_id = ? AND subject_id = ? AND teacher_id = ? AND period = ? AND status = ?',
@@ -1767,68 +1420,6 @@ class RegistrationStore extends ChangeNotifier {
       return ' وتمت إضافة الطالب ${promotedStudents.first} تلقائيًا من قائمة الانتظار.';
     }
     return ' وتمت إضافة ${promotedStudents.length} طلاب تلقائيًا من قائمة الانتظار.';
-  }
-
-  Future<String> _notifyPendingRequestsForAvailableGroup(Database db, GroupOption group, {bool createdNow = false}) async {
-    final rows = await db.rawQuery(
-      '''
-      SELECT r.id, r.student_id, s.full_name AS student_name, r.period
-      FROM registration_requests_local r
-      JOIN subjects sub ON sub.id = r.subject_id
-      JOIN teachers t ON t.id = r.teacher_id
-      JOIN students s ON s.id = r.student_id
-      WHERE r.status = 'معلق'
-        AND sub.name = ?
-        AND t.full_name = ?
-      ORDER BY CASE WHEN r.period = ? THEN 0 ELSE 1 END, r.created_at ASC, r.id ASC
-      ''',
-      [group.subject, group.teacher, group.period],
-    );
-    if (rows.isEmpty) return '';
-
-    var notified = 0;
-    for (final row in rows) {
-      final studentId = row['student_id'] as int;
-      final studentName = row['student_name'] as String? ?? 'الطالب';
-      final requestId = row['id'] as int;
-      final requestedPeriod = row['period'] as String? ?? '—';
-      final opened = await _notifyStudentOnWhatsApp(
-        db,
-        studentId: studentId,
-        message:
-            'مرحبًا $studentName، تم ${createdNow ? 'إنشاء' : 'فتح'} دورة ${group.isOpenForRegistration ? 'متاحة للتسجيل' : 'جديدة بانتظار الاعتماد'} للمادة ${group.subject} مع ${group.teacher}. '
-            'الفترة الحالية: ${periodLabel(group.period)}. '
-            '${group.isOpenForRegistration ? 'يمكن للإدارة الآن اعتماد طلبك عليها مباشرة عند التأكيد. ' : 'تم إشعارك مبكرًا، وبمجرد اعتماد الدورة ستصبح جاهزة للتسجيل. '}'
-            '${requestedPeriod == group.period ? '' : 'الفترة التي طلبتها أصلًا: ${periodLabel(requestedPeriod)}. '}'
-            'القاعة: ${group.room}. الدوام: ${group.days.isEmpty ? 'سيحدد لاحقًا' : group.days}.',
-      );
-      await db.update(
-        'registration_requests_local',
-        {
-          'decision_note': group.isOpenForRegistration
-              ? (requestedPeriod == group.period
-                  ? 'توجد الآن دورة متاحة مع نفس المادة والمدرس ويمكن اعتماد الطلب عليها.'
-                  : 'توجد الآن دورة متاحة مع نفس المادة والمدرس لكن بفترة مختلفة، وتم إشعار الطالب بذلك.')
-              : (requestedPeriod == group.period
-                  ? 'تم إنشاء دورة جديدة مطابقة مع نفس المادة والمدرس لكنها ما تزال بانتظار الاعتماد، وتم إشعار الطالب.'
-                  : 'تم إنشاء دورة جديدة مع نفس المادة والمدرس لكن بفترة مختلفة وما تزال بانتظار الاعتماد، وتم إشعار الطالب.'),
-        },
-        where: 'id = ?',
-        whereArgs: [requestId],
-      );
-      if (opened) {
-        notified += 1;
-      }
-    }
-
-    if (notified == 0) {
-      return group.isOpenForRegistration
-          ? ' كما تم تحديث ملاحظات الطلبات المعلّقة المطابقة لهذه المادة والمدرس.'
-          : ' كما تم تحديث ملاحظات الطلبات المعلّقة المرتبطة بهذه الدورة الجديدة بانتظار اعتمادها.';
-    }
-    return group.isOpenForRegistration
-        ? ' وتم إشعار $notified من أصحاب الطلبات المعلّقة بوجود دورة متاحة مع نفس المادة والمدرس.'
-        : ' وتم إشعار $notified من أصحاب الطلبات المعلّقة بإنشاء دورة جديدة لنفس المادة والمدرس بانتظار الاعتماد.';
   }
 
   String _approvalWhatsAppText({
@@ -1908,58 +1499,6 @@ class RegistrationStore extends ChangeNotifier {
 
     final rows = await db.query('teachers', columns: ['id'], where: 'full_name = ?', whereArgs: [name], limit: 1);
     return rows.first['id'] as int;
-  }
-
-  void _upsertRuntimeTeacher({
-    required String? oldName,
-    required String name,
-    required String specialization,
-    required String degree,
-    required String mobile,
-    required String whatsapp,
-    required String nationalId,
-    required bool worksGov,
-    required bool worksOther,
-    required double mgmtRating,
-  }) {
-    Teacher? existing;
-    for (final item in kTeachers) {
-      if (item.name == (oldName ?? name) || item.name == name) {
-        existing = item;
-        break;
-      }
-    }
-
-    if (existing != null) {
-      kTeachers.remove(existing);
-    }
-
-    kTeachers.add(
-      Teacher(
-        name,
-        specialization,
-        existing?.groups ?? 0,
-        existing?.enrolled ?? 0,
-        existing?.capacity ?? 12,
-        existing?.waiting ?? 0,
-        existing?.rating ?? mgmtRating,
-        existing?.payrollType ?? 'لكل جلسة',
-        existing?.rate ?? 0,
-        existing?.earned ?? 0,
-        existing?.paidOut ?? 0,
-        degree: degree,
-        mobile: mobile,
-        whatsapp: whatsapp,
-        nationalId: nationalId,
-        worksGov: worksGov,
-        worksOther: worksOther,
-        mgmtRating: mgmtRating,
-      ),
-    );
-  }
-
-  void _removeRuntimeTeacher(String name) {
-    kTeachers.removeWhere((t) => t.name == name);
   }
 
   bool _looseMatch(String a, String b) {
